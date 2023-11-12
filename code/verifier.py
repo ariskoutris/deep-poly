@@ -3,14 +3,15 @@ import torch
 
 from networks import get_network
 from utils.loading import parse_spec
+from box import certify_sample
 
 DEVICE = "cpu"
-
+LOG = True
 
 def analyze(
     net: torch.nn.Module, inputs: torch.Tensor, eps: float, true_label: int
 ) -> bool:
-    return 0
+    return certify_sample(net, inputs, true_label, eps)
 
 
 def main():
@@ -42,14 +43,16 @@ def main():
     args = parser.parse_args()
 
     true_label, dataset, image, eps = parse_spec(args.spec)
-
-    # print(args.spec)
+    
+    if LOG:
+        print(f"Verifying {args.spec} (model={args.net}, epsilon={eps}, true_label={true_label})")
 
     net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)
-
+    if LOG:
+        print(net)
+        
     image = image.to(DEVICE)
     out = net(image.unsqueeze(0))
-
     pred_label = out.max(dim=1)[1].item()
     assert pred_label == true_label
 
