@@ -18,6 +18,7 @@ class DpConstraints:
         assert self.lr.shape == self.ur.shape
         assert self.lo.shape == self.uo.shape
 
+    def __repr__(self):
 
 class DpBounds:
     def __init(self, lb: torch.Tensor, ub: torch.Tensor):
@@ -28,38 +29,39 @@ class DpBounds:
 
 
 class DpLinear():
-    def __init__(self, layer_pos : int, fc : nn.Linear):
-        self.layer = layer_pos
-        lr = fc.weight.detach()
-        ur = fc.weight.detach()
-        lo = fc.bias.detach()
-        uo = fc.bias.detach()
+        
+    def __init__(self, layer : nn.Linear):
+        self.layer = layer
+        lr = layer.weight.detach()
+        ur = layer.weight.detach()
+        lo = layer.bias.detach()
+        uo = layer.bias.detach()
         self.constraints = DpConstraints(lr, ur, lo, uo)
 
-    # Call on forward pass of bounds
     def compute_bound(self, bounds: DpBounds):
-        self.dpl = DpBounds(...)
-        raise NotImplementedError()
-
+        lb = self.constraints.lr @ bounds.lb + self.constraints.lo
+        ub = self.constraints.ur @ bounds.ub + self.constraints.uo
+        self.dpl = DpBounds(lb, ub)
 
 class DpFlatten():
-    def __init__():
-        return NotImplementedError()
-    def propagate():
-        return NotImplementedError()
-
+    def __init__(self, layer : nn.Flatten):
+        self.layer = layer
+    
+    def compute_bound(self, bounds: DpBounds):
+        self.dpl = DpBounds(bounds.lb.flatten(), bounds.ub.flatten())
 
 class DpRelu():
-    def __init__():
+    def __init__(self, layer : nn.ReLU):
+        self.layer = layer
+        
+    def compute_bound(self, bounds: DpBounds):
         return NotImplementedError()
-    def propagate():
-        return NotImplementedError()
-
 
 class DpConv():
-    def __init__():
-        return NotImplementedError()
-    def propagate():
+    def __init__(self, layer : nn.Conv2d):
+        self.layer = layer
+        
+    def compute_bound(self, bounds: DpBounds):
         return NotImplementedError()
 
 
@@ -76,7 +78,7 @@ def check_postcondition(y, bounds: DpBounds) -> bool:
 
 # Function to get the 0th deepoly object with the initial bounds
 # and the upper + lower identity constra
-def get_input_bounds(x: torch.Tensor, eps: float) -> 'DeepPoly':
+def get_input_bounds(x: torch.Tensor, eps: float):
     lb = x - eps
     lb.clamp_(min=0, max=1)
 
@@ -85,12 +87,10 @@ def get_input_bounds(x: torch.Tensor, eps: float) -> 'DeepPoly':
 
     return DpBounds(lb, ub)
 
-
 def deeppoly_backsub():
     raise NotImplementedError()
 
-def propagate_sample(model, x, eps) -> DeepPoly:
-
+def propagate_sample(model, x, eps):
     for layer in model:
         if isinstance(layer, nn.Flatten):
             pass
