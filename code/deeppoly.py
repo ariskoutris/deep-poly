@@ -62,8 +62,13 @@ class DpFlatten():
 
     def backsub(self, constraints: DpConstraints):
         assert self.input_shape != None, "Forward pass not don yet"
+        #print(f'flatten shape: {self.input_shape}, {constraints.lo.shape}')
         lr = constraints.lr.reshape((*constraints.lr.shape[:-1], *self.input_shape))
         ur = constraints.ur.reshape((*constraints.ur.shape[:-1], *self.input_shape))
+        #print(constraints.uo.shape, self.input_shape)
+        uo = constraints.uo.reshape((*constraints.uo.shape[:-1], *self.input_shape[1:]))
+        lo = constraints.lo.reshape((*constraints.lo.shape[:-1], *self.input_shape[1:]))
+        #print(f'flatten out: {lo.shape}')
         return DpConstraints(lr, ur, constraints.lo, constraints.uo)
 
 class DpRelu():
@@ -193,6 +198,7 @@ def bounded_mul(lx: torch.Tensor, ux: torch.Tensor, weight: torch.Tensor, bias: 
     lb = lb.sum(dim=tuple(range(1, lb.dim())))
     ub = ub.sum(dim=tuple(range(1, ub.dim())))
     if bias is not None:
+        #print(lb.shape, " ", bias.squeeze().shape)
         lb += bias.squeeze()
         ub += bias.squeeze()
     return lb, ub
@@ -200,6 +206,7 @@ def bounded_mul(lx: torch.Tensor, ux: torch.Tensor, weight: torch.Tensor, bias: 
 def deeppoly_backsub(dp_layers):
     constraints_acc = dp_layers[-1].constraints
     for layer in reversed(dp_layers[:-1]):
+        #print(constraints_acc.ur.shape)
         if isinstance(layer, DpLinear):
             constraints_acc = layer.backsub(constraints_acc)
         elif isinstance(layer, DpFlatten):
@@ -209,8 +216,10 @@ def deeppoly_backsub(dp_layers):
         elif isinstance(layer, DpConv):
             pass
         elif isinstance(layer, DpInput):
+            #print(dp_layers[0].bounds.ub.shape, constraints_acc.ur.shape, constraints_acc.uo.shape)
             lb, _ = bounded_mul(dp_layers[0].bounds.lb, dp_layers[0].bounds.ub, constraints_acc.lr, constraints_acc.lo)
             _, ub = bounded_mul(dp_layers[0].bounds.lb, dp_layers[0].bounds.ub, constraints_acc.ur, constraints_acc.uo)
+            #print(lb.shape, " ", ub.shape)
 
     return DpBounds(lb, ub)
 
@@ -228,10 +237,12 @@ def propagate_sample(model, x, eps):
         elif isinstance(layer, nn.Linear):
             dp_layer = DpLinear(layer)
             dp_layer.compute_bound(dp_layers[-1].bounds)
+            print(dp_layer.bounds.lb.shape)
             dp_layers.append(dp_layer)
         elif isinstance(layer, nn.ReLU):
             dp_layer = DpRelu(layer)
             dp_layer.compute_bound(dp_layers[-1].bounds)
+            print(f'uo shape: {dp_layer.constraints.uo.shape}')
             dp_layers.append(dp_layer)
     return dp_layers
 
@@ -240,7 +251,7 @@ def certify_sample(model, x, y, eps) -> bool:
     if check_postcondition(y, dp_layers[-1].bounds):
         return True
     bounds = deeppoly_backsub(dp_layers)
-    print(bounds.lb, " ", bounds.ub)
+    #print(bounds.lb, " ", bounds.ub)
     return check_postcondition(y, bounds)
 
 if __name__ == "__main__":
@@ -261,12 +272,12 @@ if __name__ == "__main__":
         x = torch.tensor([[[0]]])
         eps = 1.0
 
+
         bounds = get_input_bounds(x, eps)
         input_layer = DpInput(bounds)
         dp_layers = [input_layer]
 
-        for i, layer in enumerate(model):
-            logger_msg = f'Layer {i} - Type: {type(layer).__name__}'
+        for layer in model:
             if isinstance(layer, nn.Flatten):
                 dp_layer = DpFlatten(layer)
                 dp_layer.compute_bound(dp_layers[-1].bounds)
@@ -276,7 +287,23 @@ if __name__ == "__main__":
                 dp_layer.compute_bound(dp_layers[-1].bounds)
                 dp_layers.append(dp_layer)
             elif isinstance(layer, nn.ReLU):
-                raise NotImplementedError()
-        return dp_layers[-1].ub.data[0,1].item()
+                dp_layer = DpRelu(layer)
+                dp_layer.compute_bound(dp_layers[-1].bounds)
+                dp_layers.append(dp_layer)
+        
+        bounds = deeppoly_backsub(dp_layers)
+        lb = bounds.lb.flatten()
+        ub = bounds.ub.flatten()
 
-    simulate(0.5)
+        return ub[1].items()
+    
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    w_vals = np.linspace(-3, 5, 100)
+    ub_vals = []
+    for w in w_vals:
+        ub_vals.append(simulate(w))
+    plt.plot(w_vals, ub_vals)
+    plt.show()
+
