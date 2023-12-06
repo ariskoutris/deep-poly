@@ -21,6 +21,11 @@ class DpBounds:
         self.ub = ub
         assert self.lb.shape == self.ub.shape
         assert (self.lb > self.ub).sum() == 0
+        
+class DpInput():
+
+    def __init__(self, bounds: DpBounds):
+        self.bounds = bounds
 
 class DpLinear():
 
@@ -33,16 +38,30 @@ class DpLinear():
         self.constraints = DpConstraints(lr, ur, lo, uo)
 
     def compute_bound(self, bounds: DpBounds):
+        print(self.constraints.lr.dtype, bounds.lb.dtype)
         lb = self.constraints.lr @ bounds.lb + self.constraints.lo
         ub = self.constraints.ur @ bounds.ub + self.constraints.uo
-        self.dpl = DpBounds(lb, ub)
+        self.bounds = DpBounds(lb, ub)
+    
+    def check_postcondition(self, y) -> bool:
+        try:
+            target = y.item()
+        except AttributeError:
+            target = y
+        target_lb = self.bounds.lb[0][target].item()
+        for i in range(self.bounds.ub.shape[-1]):
+            if i != target and self.bounds.ub[0][i] >= target_lb:
+                return False
+        return True
 
 class DpFlatten():
     def __init__(self, layer : nn.Flatten):
         self.layer = layer
 
     def compute_bound(self, bounds: DpBounds):
-        self.dpl = DpBounds(bounds.lb.flatten(), bounds.ub.flatten())
+        lb = self.layer(bounds.lb)
+        ub = self.layer(bounds.ub)
+        self.bounds = DpBounds(lb, ub)
 
 class DpRelu():
     def __init__(self, layer : nn.ReLU):
@@ -72,10 +91,10 @@ def check_postcondition(y, bounds: DpBounds) -> bool:
 # Function to get the 0th deepoly object with the initial bounds
 # and the upper + lower identity constra
 def get_input_bounds(x: torch.Tensor, eps: float):
-    lb = x - eps
+    lb = (x - eps).to(torch.float)
     lb.clamp_(min=0, max=1)
 
-    ub = x + eps
+    ub = (x + eps).to(torch.float)
     ub.clamp_(min=0, max=1)
 
     return DpBounds(lb, ub)
@@ -84,14 +103,63 @@ def deeppoly_backsub():
     raise NotImplementedError()
 
 def propagate_sample(model, x, eps):
+    
+    bounds = get_input_bounds(x, eps)
+    input_layer = DpInput(bounds)
+    dp_layers = [input_layer]
+
     for layer in model:
         if isinstance(layer, nn.Flatten):
-            pass
+            dp_layer = DpFlatten(layer)
+            dp_layer.compute_bound(dp_layers[-1].bounds)
+            dp_layers.append(dp_layer)
         elif isinstance(layer, nn.Linear):
-            pass
+            dp_layer = DpLinear(layer)
+            dp_layer.compute_bound(dp_layers[-1].bounds)
+            dp_layers.append(dp_layer)
         elif isinstance(layer, nn.ReLU):
-            pass
+            raise NotImplementedError()
+    return dp_layers
 
 def certify_sample(model, x, y, eps) -> bool:
-    box = propagate_sample(model, x, eps)
-    return box.check_postcondition(y)
+    dp_layers = propagate_sample(model, x, eps)
+    return dp_layers.check_postcondition(y)
+
+if __name__ == "__main__":
+    
+    def simulate(w):
+        
+        flatten = nn.Flatten()
+        linear1 = nn.Linear(1, 2)
+        linear1.weight.data = torch.tensor([[1], [1]], dtype=torch.float)
+        linear1.bias.data = torch.tensor([w, w], dtype=torch.float)
+        relu1 = nn.ReLU()
+        linear2 = nn.Linear(2, 2)
+        linear2.weight.data = torch.tensor([[1, 0], [-1, 2]], dtype=torch.float)
+        linear2.bias.data = torch.tensor([1, 0], dtype=torch.float)
+        model = nn.Sequential(flatten, linear1, relu1, linear2)
+        model.eval()
+
+
+        x = torch.tensor([[[0]]])
+        eps = 1.0
+        
+        bounds = get_input_bounds(x, eps)
+        input_layer = DpInput(bounds)
+        dp_layers = [input_layer]
+        
+        for i, layer in enumerate(model):
+            logger_msg = f'Layer {i} - Type: {type(layer).__name__}'
+            if isinstance(layer, nn.Flatten):
+                dp_layer = DpFlatten(layer)
+                dp_layer.compute_bound(dp_layers[-1].bounds)
+                dp_layers.append(dp_layer)
+            elif isinstance(layer, nn.Linear):
+                dp_layer = DpLinear(layer)
+                dp_layer.compute_bound(dp_layers[-1].bounds)
+                dp_layers.append(dp_layer)
+            elif isinstance(layer, nn.ReLU):
+                raise NotImplementedError()
+        return dp_layers[-1].ub.data[0,1].item()
+
+    simulate(0.5)
