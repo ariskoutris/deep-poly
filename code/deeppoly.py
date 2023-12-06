@@ -30,24 +30,39 @@ class DpLinear():
 
     def __init__(self, layer : nn.Linear):
         self.layer = layer
-        lr = layer.weight.detach()
-        ur = layer.weight.detach()
+        lr = layer.weight.detach().t()
+        ur = layer.weight.detach().t()
         lo = layer.bias.detach()
         uo = layer.bias.detach()
         self.constraints = DpConstraints(lr, ur, lo, uo)
 
     def compute_bound(self, bounds: DpBounds):
-        lb, _ = bounded_matmul(bounds.lb, bounds.ub, self.constraints.lr, self.constraints.lo)
-        _, ub = bounded_matmul(bounds.lb, bounds.ub, self.constraints.ur, self.constraints.uo)
+        
+        lr_pos = torch.relu(self.constraints.lr)
+        lr_neg = -torch.relu(-self.constraints.lr)
+        ur_pos = torch.relu(self.constraints.ur)
+        ur_neg = -torch.relu(-self.constraints.ur)
+        
+        lb = bounds.lb @ lr_pos + bounds.ub @ lr_neg + self.constraints.lo
+        ub = bounds.ub @ ur_pos + bounds.lb @ ur_neg + self.constraints.uo
+        
         self.bounds = DpBounds(lb, ub)
 
-    def backsub(self, constraints: DpConstraints):
-        lr, _ = bounded_matmul_alt(self.constraints.lr, self.constraints.ur, constraints.lr)
-        _, ur = bounded_matmul_alt(self.constraints.lr, self.constraints.ur, constraints.ur)
-        lo, _ = bounded_matmul_alt(self.constraints.lo, self.constraints.uo, constraints.lr)
-        _, uo = bounded_matmul_alt(self.constraints.lo, self.constraints.uo, constraints.ur)
-        uo = uo + constraints.uo
-        lo = lo + constraints.lo
+    def backsub(self, accum_c: DpConstraints):
+        
+        accum_c_lr_pos = torch.relu(accum_c.lr)
+        accum_c_lr_neg = -torch.relu(-accum_c.lr)
+        accum_c_ur_pos = torch.relu(accum_c.ur)
+        accum_c_ur_neg = -torch.relu(-accum_c.ur)
+        
+        lr =  self.constraints.lr @ accum_c_lr_pos +  self.constraints.ur @ accum_c_lr_neg
+        ur =  self.constraints.ur @ accum_c_ur_pos +  self.constraints.lr @ accum_c_ur_neg
+
+        lo = self.constraints.lo @ accum_c_lr_pos + self.constraints.uo @ accum_c_lr_neg
+        uo = self.constraints.uo @ accum_c_ur_pos + self.constraints.lo @ accum_c_ur_neg
+        uo = uo + accum_c.uo
+        lo = lo + accum_c.lo
+
         return DpConstraints(lr, ur, lo, uo)
 
 class DpFlatten():
@@ -61,12 +76,8 @@ class DpFlatten():
         self.bounds = DpBounds(lb, ub)
 
     def backsub(self, constraints: DpConstraints):
-        assert self.input_shape != None, "Forward pass not don yet"
-        #print(f'flatten shape: {self.input_shape}, {constraints.lo.shape}')
-        lr = constraints.lr.reshape((*constraints.lr.shape[:-1], *self.input_shape))
-        ur = constraints.ur.reshape((*constraints.ur.shape[:-1], *self.input_shape))
-        #print(constraints.uo.shape, self.input_shape)
-        #print(f'flatten out: {lo.shape}')
+        lr = constraints.lr.reshape((*self.input_shape, *constraints.lr.shape[1:]))
+        ur = constraints.ur.reshape((*self.input_shape, *constraints.ur.shape[1:]))
         return DpConstraints(lr, ur, constraints.lo, constraints.uo)
 
 class DpRelu():
@@ -99,7 +110,7 @@ class DpRelu():
 
         # For now use the x >= 0 constraint for lower relu
         lr = torch.zeros_like(bounds.lb)
-        lr[mask_crossing] = torch.where(-bounds.lb < bounds.ub, 1.0, 0.0)[mask_crossing]
+        lr[mask_crossing] = torch.where(-bounds.lb < bounds.ub, 0.0, 0.0)[mask_crossing]
         lr[mask_lower] = 1
         lo = torch.zeros_like(bounds.lb)
 
@@ -108,21 +119,34 @@ class DpRelu():
     def compute_bound(self, bounds: DpBounds):
 
         self.compute_constraints(bounds)
-
-        lb, _ = bounded_matmul(bounds.lb, bounds.ub, self.constraints.lr, self.constraints.lo)
-        _, ub = bounded_matmul(bounds.lb, bounds.ub, self.constraints.ur, self.constraints.uo)
-
+        
+        lr_pos = torch.relu(self.constraints.lr)
+        lr_neg = -torch.relu(-self.constraints.lr)
+        ur_pos = torch.relu(self.constraints.ur)
+        ur_neg = -torch.relu(-self.constraints.ur)
+        
+        lb = bounds.lb @ lr_pos + bounds.ub @ lr_neg + self.constraints.lo
+        ub = bounds.ub @ ur_pos + bounds.lb @ ur_neg + self.constraints.uo
+        
         self.bounds = DpBounds(lb, ub)
 
-    def backsub(self, accum_c : DpConstraints):
-        lr, _ = bounded_matmul_alt(self.constraints.lr, self.constraints.ur, accum_c.lr)
-        _, ur = bounded_matmul_alt(self.constraints.lr, self.constraints.ur, accum_c.ur)
-        lo, _ = bounded_matmul(self.constraints.lo, self.constraints.uo, accum_c.lr)
-        _, uo = bounded_matmul(self.constraints.lo, self.constraints.uo, accum_c.ur)
+    def backsub(self, accum_c: DpConstraints):
+        
+        accum_c_lr_pos = torch.relu(accum_c.lr)
+        accum_c_lr_neg = -torch.relu(-accum_c.lr)
+        accum_c_ur_pos = torch.relu(accum_c.ur)
+        accum_c_ur_neg = -torch.relu(-accum_c.ur)
+        
+        lr =  self.constraints.lr @ accum_c_lr_pos +  self.constraints.ur @ accum_c_lr_neg
+        ur =  self.constraints.ur @ accum_c_ur_pos +  self.constraints.lr @ accum_c_ur_neg
+
+        lo = self.constraints.lo @ accum_c_lr_pos + self.constraints.uo @ accum_c_lr_neg
+        uo = self.constraints.uo @ accum_c_ur_pos + self.constraints.lo @ accum_c_ur_neg
         uo = uo + accum_c.uo
         lo = lo + accum_c.lo
 
         return DpConstraints(lr, ur, lo, uo)
+
 
 class DpConv():
     def __init__(self, layer : nn.Conv2d):
@@ -148,56 +172,18 @@ def check_postcondition(y, bounds: DpBounds) -> bool:
 
 # Function to get the 0th deepoly object with the initial bounds
 # and the upper + lower identity constra
-def get_input_bounds(x: torch.Tensor, eps: float):
+def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
     lb = (x - eps).to(torch.float)
-    lb.clamp_(min=0, max=1)
+    lb.clamp_(min=min_val, max=max_val)
 
     ub = (x + eps).to(torch.float)
-    ub.clamp_(min=0, max=1)
+    ub.clamp_(min=min_val, max=max_val)
 
     return DpBounds(lb, ub)
-
-def bounded_matmul(lx: torch.Tensor, ux: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor = None) -> (torch.Tensor, torch.Tensor):
-    center = (ux + lx) / 2
-    eps = (ux - lx) / 2
-    center_out = center @ weight.t()
-    if bias is not None:
-        center_out = center_out + bias
-    eps_out = eps @ weight.abs().t()
-    lb = center_out - eps_out
-    ub = center_out + eps_out
-    return lb, ub
-
-def bounded_matmul_alt(lx: torch.Tensor, ux: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor = None) -> (torch.Tensor, torch.Tensor):
-    center = (ux + lx) / 2
-    eps = (ux - lx) / 2
-    center_out = weight @ center
-    if bias is not None:
-        center_out = center_out + bias
-    eps_out = weight.abs() @ eps
-    lb = center_out - eps_out
-    ub = center_out + eps_out
-    return lb, ub
-
-def bounded_mul(lx: torch.Tensor, ux: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor = None) -> (torch.Tensor, torch.Tensor):
-    center = (ux + lx) / 2
-    eps = (ux - lx) / 2
-    center_out = weight * center
-    eps_out = weight.abs() * eps
-    lb = center_out - eps_out
-    ub = center_out + eps_out
-    lb = lb.sum(dim=tuple(range(1, lb.dim())))
-    ub = ub.sum(dim=tuple(range(1, ub.dim())))
-    if bias is not None:
-        #print(lb.shape, " ", bias.squeeze().shape)
-        lb += bias.squeeze()
-        ub += bias.squeeze()
-    return lb, ub
 
 def deeppoly_backsub(dp_layers):
     constraints_acc = dp_layers[-1].constraints
     for layer in reversed(dp_layers[:-1]):
-        #print(constraints_acc.ur.shape)
         if isinstance(layer, DpLinear):
             constraints_acc = layer.backsub(constraints_acc)
         elif isinstance(layer, DpFlatten):
@@ -207,10 +193,14 @@ def deeppoly_backsub(dp_layers):
         elif isinstance(layer, DpConv):
             pass
         elif isinstance(layer, DpInput):
-            #print(dp_layers[0].bounds.ub.shape, constraints_acc.ur.shape, constraints_acc.uo.shape)
-            lb, _ = bounded_mul(dp_layers[0].bounds.lb, dp_layers[0].bounds.ub, constraints_acc.lr, constraints_acc.lo)
-            _, ub = bounded_mul(dp_layers[0].bounds.lb, dp_layers[0].bounds.ub, constraints_acc.ur, constraints_acc.uo)
-            #print(lb.shape, " ", ub.shape)
+            constraints_acc_ur_pos = torch.relu(constraints_acc.ur)
+            constraints_acc_ur_neg = -torch.relu(-constraints_acc.ur)
+            constraints_acc_lr_neg = -torch.relu(-constraints_acc.lr)
+            constraints_acc_lr_pos = torch.relu(constraints_acc.lr)
+            lb_in = dp_layers[0].bounds.lb
+            ub_in = dp_layers[0].bounds.ub
+            lb = lb_in @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
+            ub = ub_in @ constraints_acc_ur_pos + lb_in @ constraints_acc_ur_neg + constraints_acc.uo 
 
     return DpBounds(lb, ub)
 
@@ -242,7 +232,6 @@ def certify_sample(model, x, y, eps) -> bool:
     if check_postcondition(y, dp_layers[-1].bounds):
         return True
     bounds = deeppoly_backsub(dp_layers)
-    #print(bounds.lb, " ", bounds.ub)
     return check_postcondition(y, bounds)
 
 if __name__ == "__main__":
@@ -250,11 +239,12 @@ if __name__ == "__main__":
     def simulate(w):
 
         flatten = nn.Flatten()
-        linear1 = nn.Linear(1, 2)
+        linear1 = nn.Linear(3, 6)
+        linear1.weight.data = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=torch.float)
         linear1.weight.data = torch.tensor([[1], [1]], dtype=torch.float)
         linear1.bias.data = torch.tensor([w, w], dtype=torch.float)
         relu1 = nn.ReLU()
-        linear2 = nn.Linear(2, 2)
+        linear2 = nn.Linear(6, 2)
         linear2.weight.data = torch.tensor([[1, 0], [-1, 2]], dtype=torch.float)
         linear2.bias.data = torch.tensor([1, 0], dtype=torch.float)
         model = nn.Sequential(flatten, linear1, relu1, linear2)
@@ -264,11 +254,11 @@ if __name__ == "__main__":
         eps = 1.0
 
 
-        bounds = get_input_bounds(x, eps)
+        bounds = get_input_bounds(x, eps, -1, 1)
         input_layer = DpInput(bounds)
         dp_layers = [input_layer]
-
-        for layer in model:
+        print(w)
+        for i, layer in enumerate(model):
             if isinstance(layer, nn.Flatten):
                 dp_layer = DpFlatten(layer)
                 dp_layer.compute_bound(dp_layers[-1].bounds)
@@ -281,19 +271,23 @@ if __name__ == "__main__":
                 dp_layer = DpRelu(layer)
                 dp_layer.compute_bound(dp_layers[-1].bounds)
                 dp_layers.append(dp_layer)
+            print(f'layer {dp_layer.bounds.lb, dp_layer.bounds.ub}')
+        print()
 
         bounds = deeppoly_backsub(dp_layers)
+        
         lb = bounds.lb.flatten()
         ub = bounds.ub.flatten()
+        return ub[1].item()
 
-        return ub[1].items()
+    # import numpy as np
+    # import matplotlib.pyplot as plt
 
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    w_vals = np.linspace(-3, 5, 100)
-    ub_vals = []
-    for w in w_vals:
-        ub_vals.append(simulate(w))
-    plt.plot(w_vals, ub_vals)
-    plt.show()
+    # w_vals = np.linspace(-3, 5, 50)
+    # ub_vals = []
+    # for w in w_vals:
+    #     ub_vals.append(simulate(w))
+    # plt.plot(w_vals, ub_vals)
+    # plt.show()
+    
+    simulate(0)
