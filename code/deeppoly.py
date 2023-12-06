@@ -28,7 +28,7 @@ class DpBounds:
 
 
 class DpLinear():
-    def __init__(layer_pos : int, layer : nn.Linear):
+    def __init__(self, layer_pos : int, fc : nn.Linear):
         self.layer = layer_pos
         lr = fc.weight.detach()
         ur = fc.weight.detach()
@@ -37,7 +37,7 @@ class DpLinear():
         self.constraints = DpConstraints(lr, ur, lo, uo)
 
     # Call on forward pass of bounds
-    def compute_bound(bounds: DpBounds):
+    def compute_bound(self, bounds: DpBounds):
         self.dpl = DpBounds(...)
         raise NotImplementedError()
 
@@ -63,11 +63,11 @@ class DpConv():
         return NotImplementedError()
 
 
-def check_postcondition(self, y, bounds: DpBounds) -> bool:
+def check_postcondition(y, bounds: DpBounds) -> bool:
     try:
         target = y.item()
     except AttributeError:
-        target = y 
+        target = y
     target_lb = bounds.lb[0][target].item()
     for i in range(bounds.ub.shape[-1]):
         if i != target and bounds.ub[0][i] >= target_lb:
@@ -83,48 +83,22 @@ def get_input_bounds(x: torch.Tensor, eps: float) -> 'DeepPoly':
     ub = x + eps
     ub.clamp_(min=0, max=1)
 
-    return DeepPoly(lb, ub, torch.eye(lb.numel()), torch.eye(ub.numel()), torch.zeros_like(lb), torch.zeros_like(ub))
+    return DpBounds(lb, ub)
 
 
 def deeppoly_backsub():
     raise NotImplementedError()
 
 def propagate_sample(model, x, eps) -> DeepPoly:
-    box = DeepPoly.construct_initial_box(x, eps)
+
     for layer in model:
         if isinstance(layer, nn.Flatten):
-            DpFlatten(layer).propagate(box)
-            deeppoly_layers.append(DpFlatten(layer))
+            pass
         elif isinstance(layer, nn.Linear):
-            DpLinear(layer).propagate(box)
-            deeppoly_layers.append(DpFlatten(layer))
+            pass
         elif isinstance(layer, nn.ReLU):
-                    else:
-            raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
-    return box
-
-def propagate_sample_LE(model, x, eps, C=None) -> DeepPoly:
-    box = DeepPoly.construct_initial_box(x, eps)
-    for i, layer in enumerate(model):
-        last = i == len(model) - 1
-        if isinstance(layer, nn.Linear):
-            if last and C is not None:
-                box = box.propagate_linear_LE(layer, C=C)
-            else:
-                box = box.propagate_linear(layer)
-        elif last and C is not None:
-            assert False, "If last-layer trick is used last layer must be linear"
-        elif isinstance(layer, nn.ReLU):
-            box = box.propagate_relu(layer)
-        else:
-            raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
-    return box
+            pass
 
 def certify_sample(model, x, y, eps) -> bool:
     box = propagate_sample(model, x, eps)
     return box.check_postcondition(y)
-
-def certify_sample_LE(model, x, y, eps) -> bool:
-    C = get_C(y)
-    box = propagate_sample_LE(model, x, eps, C=C)
-    return (box.lb > 0).all()
