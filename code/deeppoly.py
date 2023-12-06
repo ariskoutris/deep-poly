@@ -66,8 +66,6 @@ class DpFlatten():
         lr = constraints.lr.reshape((*constraints.lr.shape[:-1], *self.input_shape))
         ur = constraints.ur.reshape((*constraints.ur.shape[:-1], *self.input_shape))
         #print(constraints.uo.shape, self.input_shape)
-        uo = constraints.uo.reshape((*constraints.uo.shape[:-1], *self.input_shape[1:]))
-        lo = constraints.lo.reshape((*constraints.lo.shape[:-1], *self.input_shape[1:]))
         #print(f'flatten out: {lo.shape}')
         return DpConstraints(lr, ur, constraints.lo, constraints.uo)
 
