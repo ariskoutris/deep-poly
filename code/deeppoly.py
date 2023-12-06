@@ -84,52 +84,45 @@ class DpRelu():
         self.bias_upper = - bounds.lb * self.slope
 
         #  0 >= ub >= lb
-        mask_upper = torch.where(bounds.ub <= 0, 0, 1)
+        mask_upper = bounds.ub <= 0
         # ub >= lb >= 0
-        mask_lower = torch.where(bounds.lb >= 0, 1, 0)
+        mask_lower = bounds.lb >= 0
         # ub >= 0 >= lb
-        mask_crossing = 1 - (mask_lower + mask_upper)
+        mask_crossing =  ~(mask_lower | mask_upper)
+        assert (mask_crossing | mask_upper | mask_lower).all()
 
-        self.slope = mask_crossing * self.slope
-        ur = self.slope
+        ur = torch.zeros_like(bounds.ub)
+        ur[mask_crossing] = self.slope[mask_crossing]
+        ur[mask_lower] = 1
+        ur[mask_upper] = 0
 
-        uo = torch.zeros(bounds.lb.shape)
-        uo = mask_lower * bounds.ub + mask_crossing * self.bias_upper
+        uo = torch.zeros_like(bounds.lb)
+        uo[mask_crossing] = self.bias_upper[mask_crossing]
 
         # For now use the x >= 0 constraint for lower relu
-        lr = torch.zeros(bounds.lb.shape)
-        lo = mask_lower * bounds.lb
+        lr = torch.zeros_like(bounds.lb)
+        lr[mask_crossing] = torch.where(-bounds.lb < bounds.ub, 1.0, 0.0)[mask_crossing]
+        lr[mask_lower] = 1
+        lo = torch.zeros_like(bounds.lb)
 
-        self.constraints = DpConstraints(lr, ur, lo, uo)
+        self.constraints = DpConstraints(torch.diag(lr[0]), torch.diag(ur[0]), lo, uo)
 
     def compute_bound(self, bounds: DpBounds):
 
         self.compute_constraints(bounds)
 
-        pos_lr = nn.functional.relu(self.constraints.lr)
-        neg_lr = -nn.functional.relu(-self.constraints.lr)
-        lb = pos_lr * bounds.lb + neg_lr * bounds.ub + self.constraints.lo
-
-        pos_ur = nn.functional.relu(self.constraints.ur)
-        neg_ur = -nn.functional.relu(-self.constraints.ur)
-        ub = pos_ur * bounds.ub + neg_ur * bounds.lb + self.constraints.uo
+        lb, _ = bounded_matmul(bounds.lb, bounds.ub, self.constraints.lr, self.constraints.lo)
+        _, ub = bounded_matmul(bounds.lb, bounds.ub, self.constraints.ur, self.constraints.uo)
 
         self.bounds = DpBounds(lb, ub)
 
     def backsub(self, accum_c : DpConstraints):
-        pos_ur = nn.functional.relu(accum_c.ur)
-        neg_ur = -nn.functional.relu(-accum_c.ur)
-
-        ur = self.constraints.ur * pos_ur + self.constraints.lr * neg_ur
-        uo = self.constraints.uo * pos_ur + self.constraints.lo * neg_ur
-        uo += accum_c.uo
-
-        pos_lr = nn.functional.relu(accum_c.lr)
-        neg_lr = -nn.functional.relu(-accum_c.lr)
-
-        lr = self.constraints.lr * pos_lr + self.constraints.ur * neg_lr
-        lo = self.constraints.lo * pos_lr + self.constraints.uo * neg_lr
-        lo += accum_c.lo
+        lr, _ = bounded_matmul_alt(self.constraints.lr, self.constraints.ur, accum_c.lr)
+        _, ur = bounded_matmul_alt(self.constraints.lr, self.constraints.ur, accum_c.ur)
+        lo, _ = bounded_matmul(self.constraints.lo, self.constraints.uo, accum_c.lr)
+        _, uo = bounded_matmul(self.constraints.lo, self.constraints.uo, accum_c.ur)
+        uo = uo + accum_c.uo
+        lo = lo + accum_c.lo
 
         return DpConstraints(lr, ur, lo, uo)
 
@@ -290,13 +283,13 @@ if __name__ == "__main__":
                 dp_layer = DpRelu(layer)
                 dp_layer.compute_bound(dp_layers[-1].bounds)
                 dp_layers.append(dp_layer)
-        
+
         bounds = deeppoly_backsub(dp_layers)
         lb = bounds.lb.flatten()
         ub = bounds.ub.flatten()
 
         return ub[1].items()
-    
+
     import numpy as np
     import matplotlib.pyplot as plt
 
@@ -306,4 +299,3 @@ if __name__ == "__main__":
         ub_vals.append(simulate(w))
     plt.plot(w_vals, ub_vals)
     plt.show()
-

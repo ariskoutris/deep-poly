@@ -43,14 +43,14 @@ def main():
     args = parser.parse_args()
 
     true_label, dataset, image, eps = parse_spec(args.spec)
-    
+
     if LOG:
         print(f"Verifying {args.spec} (model={args.net}, epsilon={eps}, true_label={true_label})")
 
     net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)
     if LOG:
         print(net)
-        
+
     image = image.to(DEVICE)
     out = net(image.unsqueeze(0))
     pred_label = out.max(dim=1)[1].item()
