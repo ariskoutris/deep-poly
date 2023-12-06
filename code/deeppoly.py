@@ -1,12 +1,6 @@
 import torch
 import torch.nn as nn
 
-def get_C(y_batch, n_class=10):
-    def _get_C(n_class, y):
-        I = [i for i in range(n_class) if i != y]
-        return torch.eye(n_class, dtype=torch.float32, device=y_batch.device)[y].unsqueeze(dim=0) - torch.eye(n_class, dtype=torch.float32, device=y_batch.device)[I]
-    return torch.stack([_get_C(n_class,y) for y in y_batch], dim=0)
-
 deeppoly_layers = []
 
 class DpConstraints:
@@ -19,17 +13,17 @@ class DpConstraints:
         assert self.lo.shape == self.uo.shape
 
     def __repr__(self):
+        pass
 
 class DpBounds:
-    def __init(self, lb: torch.Tensor, ub: torch.Tensor):
+    def __init__(self, lb: torch.Tensor, ub: torch.Tensor):
         self.lb = lb
         self.ub = ub
         assert self.lb.shape == self.ub.shape
         assert (self.lb > self.ub).sum() == 0
 
-
 class DpLinear():
-        
+
     def __init__(self, layer : nn.Linear):
         self.layer = layer
         lr = layer.weight.detach()
@@ -46,24 +40,23 @@ class DpLinear():
 class DpFlatten():
     def __init__(self, layer : nn.Flatten):
         self.layer = layer
-    
+
     def compute_bound(self, bounds: DpBounds):
         self.dpl = DpBounds(bounds.lb.flatten(), bounds.ub.flatten())
 
 class DpRelu():
     def __init__(self, layer : nn.ReLU):
         self.layer = layer
-        
+
     def compute_bound(self, bounds: DpBounds):
         return NotImplementedError()
 
 class DpConv():
     def __init__(self, layer : nn.Conv2d):
         self.layer = layer
-        
+
     def compute_bound(self, bounds: DpBounds):
         return NotImplementedError()
-
 
 def check_postcondition(y, bounds: DpBounds) -> bool:
     try:
