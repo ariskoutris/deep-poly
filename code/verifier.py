@@ -3,7 +3,7 @@ import torch
 
 from networks import get_network
 from utils.loading import parse_spec
-import box, deeppoly
+import deeppoly
 
 DEVICE = "cpu"
 LOG = True
@@ -11,7 +11,7 @@ LOG = True
 def analyze(
     net: torch.nn.Module, inputs: torch.Tensor, eps: float, true_label: int
 ) -> bool:
-    return box.certify_sample(net, inputs, true_label, eps)
+    return deeppoly.certify_sample(net, inputs, true_label, eps)
 
 
 def main():
