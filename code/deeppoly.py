@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 
-deeppoly_layers = []
-
 class DpConstraints:
     def __init__(self, lr: torch.Tensor, ur: torch.Tensor, lo: torch.Tensor, uo: torch.Tensor):
         self.lr = lr
@@ -39,8 +37,8 @@ class DpLinear():
 
     def compute_bound(self, bounds: DpBounds):
         print(self.constraints.lr.dtype, bounds.lb.dtype)
-        lb = self.constraints.lr @ bounds.lb + self.constraints.lo
-        ub = self.constraints.ur @ bounds.ub + self.constraints.uo
+        lb, _ = bounded_matmul(bounds, self.constraints.lr, self.constraints.lo)
+        _, ub = bounded_matmul(bounds, self.constraints.ur, self.constraints.uo)
         self.bounds = DpBounds(lb, ub)
 
 class DpFlatten():
@@ -125,6 +123,18 @@ def get_input_bounds(x: torch.Tensor, eps: float):
     ub.clamp_(min=0, max=1)
 
     return DpBounds(lb, ub)
+
+def bounded_matmul(bounds: DpBounds, weight: torch.Tensor, bias: torch.Tensor = None) -> [torch.Tensor, torch.Tensor]:
+    center = (bounds.ub + bounds.lb) / 2
+    eps = (bounds.ub - bounds.lb) / 2
+    
+    center_out = center @ weight.t()
+    if bias is not None:
+        center_out = center_out + bias
+    eps_out = eps @ weight.abs().t()
+    lb = center_out - eps_out
+    ub = center_out + eps_out
+    return lb, ub
 
 def deeppoly_backsub():
     raise NotImplementedError()
