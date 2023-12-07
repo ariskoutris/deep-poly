@@ -1,50 +1,14 @@
 import torch
 import torch.nn as nn
-
+from dp_utils import *
 import logging
 logger = logging.getLogger(__name__)
-
-class DpConstraints:
-    def __init__(self, lr: torch.Tensor, ur: torch.Tensor, lo: torch.Tensor, uo: torch.Tensor):
-        self.lr = lr
-        self.ur = ur
-        self.lo = lo
-        self.uo = uo
-        assert self.lr.shape == self.ur.shape
-        assert self.lo.shape == self.uo.shape
-
-    def __repr__(self):
-        pass
-
-    def __str__(self):
-        # out =  "\tlr: " + str(self.lr).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
-        # out += "\tur: " + str(self.ur).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
-        # out += "\tlo: " + str(self.lo).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
-        # out += "\tuo: " + str(self.uo).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
-
-        out = f"lr: shape [{self.lr.shape}], min: {self.lr.min()}, max: {self.lr.max()}\n"
-        out += f"ur: shape [{self.ur.shape}], min: {self.ur.min()}, max: {self.ur.max()}\n"
-        out += f"lo: shape [{self.lo.shape}], min: {self.lo.min()}, max: {self.lo.max()}\n"
-        out += f"uo: shape [{self.uo.shape}], min: {self.uo.min()}, max: {self.uo.max()}\n"
-        return out
-
-    def copy(self):
-        return DpConstraints(self.lr.clone(), self.ur.clone(), self.lo.clone(), self.uo.clone())
-
-class DpBounds:
-    def __init__(self, lb: torch.Tensor, ub: torch.Tensor):
-        self.lb = lb
-        self.ub = ub
-        assert self.lb.shape == self.ub.shape
-        assert (self.lb > self.ub).sum() == 0
-
-    def __repr__(self):
-        return f"lb: {self.lb}\tub: {self.ub}"
 
 class DpInput():
     def __init__(self, bounds: DpBounds):
         self.layer = None
         self.bounds = bounds
+
 
 class DpLinear():
 
@@ -57,37 +21,19 @@ class DpLinear():
         self.constraints = DpConstraints(lr, ur, lo, uo)
 
     def compute_bound(self, bounds: DpBounds):
-        
-        lr_pos = torch.relu(self.constraints.lr).t()
-        lr_neg = -torch.relu(-self.constraints.lr).t()
-        ur_pos = torch.relu(self.constraints.ur).t()
-        ur_neg = -torch.relu(-self.constraints.ur).t()
-        
-        lb = bounds.lb @ lr_pos + bounds.ub @ lr_neg + self.constraints.lo
-        ub = bounds.ub @ ur_pos + bounds.lb @ ur_neg + self.constraints.uo
-        
-        self.bounds = DpBounds(lb, ub)
+        curr_c = DpConstraints(self.constraints.lr.t(), self.constraints.ur.t(), self.constraints.lo, self.constraints.uo)
+        self.bounds = bounds_mul_constraints(curr_c, bounds)
 
     def backsub(self, accum_c: DpConstraints):
-        
-        accum_c_lr_pos = torch.relu(accum_c.lr)
-        accum_c_lr_neg = -torch.relu(-accum_c.lr)
-        accum_c_ur_pos = torch.relu(accum_c.ur)
-        accum_c_ur_neg = -torch.relu(-accum_c.ur)
+        return constraints_mul(self.constraints, accum_c)
 
-        lr =  self.constraints.lr.t() @ accum_c_lr_pos +  self.constraints.ur.t() @ accum_c_lr_neg
-        ur =  self.constraints.ur.t() @ accum_c_ur_pos +  self.constraints.lr.t() @ accum_c_ur_neg
-
-        lo = self.constraints.lo @ accum_c_lr_pos + self.constraints.uo @ accum_c_lr_neg
-        uo = self.constraints.uo @ accum_c_ur_pos + self.constraints.lo @ accum_c_ur_neg
-        uo = uo + accum_c.uo
-        lo = lo + accum_c.lo
-
-        return DpConstraints(lr, ur, lo, uo)
 
 class DpFlatten():
     def __init__(self, layer : nn.Flatten):
         self.layer = layer
+
+    def compute_constraints(self, bounds: DpBounds):
+        pass
 
     def compute_bound(self, bounds: DpBounds):
         self.input_shape = bounds.lb.shape
@@ -99,6 +45,7 @@ class DpFlatten():
         lr = constraints.lr.reshape((*self.input_shape, *constraints.lr.shape[1:]))
         ur = constraints.ur.reshape((*self.input_shape, *constraints.ur.shape[1:]))
         return DpConstraints(lr, ur, constraints.lo, constraints.uo)
+
 
 class DpRelu():
     def __init__(self, layer : nn.ReLU):
@@ -139,33 +86,11 @@ class DpRelu():
     def compute_bound(self, bounds: DpBounds):
 
         self.compute_constraints(bounds)
-        
-        lr_pos = torch.relu(self.constraints.lr)
-        lr_neg = -torch.relu(-self.constraints.lr)
-        ur_pos = torch.relu(self.constraints.ur)
-        ur_neg = -torch.relu(-self.constraints.ur)
-        
-        lb = bounds.lb @ lr_pos + bounds.ub @ lr_neg + self.constraints.lo
-        ub = bounds.ub @ ur_pos + bounds.lb @ ur_neg + self.constraints.uo
-        
-        self.bounds = DpBounds(lb, ub)
+        self.bounds = bounds_mul_constraints(self.constraints, bounds)
 
     def backsub(self, accum_c: DpConstraints):
-        
-        accum_c_lr_pos = torch.relu(accum_c.lr)
-        accum_c_lr_neg = -torch.relu(-accum_c.lr)
-        accum_c_ur_pos = torch.relu(accum_c.ur)
-        accum_c_ur_neg = -torch.relu(-accum_c.ur)
-        
-        lr =  self.constraints.lr @ accum_c_lr_pos +  self.constraints.ur @ accum_c_lr_neg
-        ur =  self.constraints.ur @ accum_c_ur_pos +  self.constraints.lr @ accum_c_ur_neg
+        return constraints_mul(self.constraints, accum_c)
 
-        lo = self.constraints.lo @ accum_c_lr_pos + self.constraints.uo @ accum_c_lr_neg
-        uo = self.constraints.uo @ accum_c_ur_pos + self.constraints.lo @ accum_c_ur_neg
-        uo = uo + accum_c.uo
-        lo = lo + accum_c.lo
-
-        return DpConstraints(lr, ur, lo, uo)
 
 class DpConv():
     def __init__(self, layer : nn.Conv2d):
@@ -174,11 +99,12 @@ class DpConv():
     def compute_bound(self, bounds: DpBounds):
         return NotImplementedError()
 
+
 class DiffLayer():
     def __init__(self, target: int, n_classes: int):
         self.target = target
         self.n_classes = n_classes
-        
+
     def compute_constraints(self, bounds: DpBounds):
         I = [i for i in range(self.n_classes) if i != self.target]
         C = torch.eye(self.n_classes, dtype=torch.float)[self.target].unsqueeze(dim=0) - torch.eye(self.n_classes, dtype=torch.float)[I]
@@ -187,86 +113,32 @@ class DiffLayer():
         uo = torch.zeros_like(ur[:, 0])
         self.constraints = DpConstraints(lr, ur, lo, uo)
 
+    def compute_bound(self, bounds: DpBounds):
+        self.compute_constraints(bounds)
+
     def backsub(self, accum_c: DpConstraints):
-        
-        accum_c_lr_pos = torch.relu(accum_c.lr)
-        accum_c_lr_neg = -torch.relu(-accum_c.lr)
-        accum_c_ur_pos = torch.relu(accum_c.ur)
-        accum_c_ur_neg = -torch.relu(-accum_c.ur)
-        
-        lr =  self.constraints.lr @ accum_c_lr_pos +  self.constraints.ur @ accum_c_lr_neg
-        ur =  self.constraints.ur @ accum_c_ur_pos +  self.constraints.lr @ accum_c_ur_neg
+        return constraints_mul(self.constraints, accum_c)
 
-        lo = self.constraints.lo @ accum_c_lr_pos + self.constraints.uo @ accum_c_lr_neg
-        uo = self.constraints.uo @ accum_c_ur_pos + self.constraints.lo @ accum_c_ur_neg
-        uo = uo + accum_c.uo
-        lo = lo + accum_c.lo
-
-        return DpConstraints(lr, ur, lo, uo)
-    
-def check_postcondition(y, bounds: DpBounds) -> bool:
-    try:
-        target = y.item()
-    except AttributeError:
-        target = y
-
-    lb = bounds.lb.flatten()
-    ub = bounds.ub.flatten()
-    
-    target_lb = lb[target].item()
-    min_interval = ub.max() - lb.min()
-    
-    out = True
-    for i in range(ub.shape[0]):
-        if i != target and ub[i] >= target_lb:
-            out = False
-        if i != target:
-            min_interval = min(min_interval, target_lb - ub[i])
-    logger.info(f'Certification Distance: {min_interval}\n')
-    return out
-
-def check_postcondition_le(bounds: DpBounds) -> bool:
-    lb = bounds.lb.flatten()
-    ub = bounds.ub.flatten()
-    logger.info(f'Certification Distance: {lb.min()}\n')
-    return lb.min() >= 0
-
-def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
-    lb = (x - eps).to(torch.float)
-    lb.clamp_(min=min_val, max=max_val)
-
-    ub = (x + eps).to(torch.float)
-    ub.clamp_(min=min_val, max=max_val)
-
-    return DpBounds(lb, ub)
 
 def deeppoly_backsub(dp_layers):
     constraints_acc = dp_layers[-1].constraints.copy()
     constraints_acc.ur = constraints_acc.ur.t()
     constraints_acc.lr = constraints_acc.lr.t()
+
     logger.debug(f'Last Layer:\n{str(constraints_acc)}')
     for i, layer in enumerate(reversed(dp_layers[:-1])):
-        if isinstance(layer, DpLinear):
-            constraints_acc = layer.backsub(constraints_acc)
-        elif isinstance(layer, DpFlatten):
-            constraints_acc = layer.backsub(constraints_acc)
-        elif isinstance(layer, DpRelu):
-            constraints_acc = layer.backsub(constraints_acc)
-        elif isinstance(layer, DpConv):
-            pass
-        elif isinstance(layer, DpInput):  
+        # If this is the first layer, then just multiply with input bounds
+        if isinstance(layer, DpInput):
             ur = constraints_acc.ur.flatten(1, -2)
             lr = constraints_acc.lr.flatten(1, -2)
             lb_in = layer.bounds.lb.flatten(1)
             ub_in = layer.bounds.ub.flatten(1)
-            constraints_acc_ur_pos = torch.relu(ur)
-            constraints_acc_ur_neg = -torch.relu(-ur)
-            constraints_acc_lr_pos = torch.relu(lr)
-            constraints_acc_lr_neg = -torch.relu(-lr)
-            lb = lb_in @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
-            ub = ub_in @ constraints_acc_ur_pos + lb_in @ constraints_acc_ur_neg + constraints_acc.uo 
-            lb = lb.squeeze(0)
-            ub = ub.squeeze(0)
+            b_curr = bounds_mul_constraints(DpConstraints(lr, ur, constraints_acc.lo, constraints_acc.uo), DpBounds(lb_in, ub_in))
+            lb = b_curr.lb.squeeze(0)
+            ub = b_curr.ub.squeeze(0)
+        else:
+            constraints_acc = layer.backsub(constraints_acc)
+
         logger.debug(f'Layer {len(dp_layers) - 2 - i} [{layer.layer}]:')
         logger.debug(str(constraints_acc))
     return DpBounds(lb, ub)
@@ -275,149 +147,54 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1):
     bounds = get_input_bounds(x, eps, min_val, max_val)
     input_layer = DpInput(bounds)
     dp_layers = [input_layer]
+
     logger.debug(f'Input Layer')
     logger.debug(f'lb: shape [{input_layer.bounds.lb.shape}], min: {input_layer.bounds.lb.min()}, max: {input_layer.bounds.lb.max()}')
     logger.debug(f'ub: shape [{input_layer.bounds.ub.shape}], min: {input_layer.bounds.ub.min()}, max: {input_layer.bounds.ub.max()}')
     for i, layer in enumerate(model):
+        dp_layer = None
         if isinstance(layer, nn.Flatten):
             dp_layer = DpFlatten(layer)
-            dp_layer.compute_bound(dp_layers[-1].bounds)
-            dp_layers.append(dp_layer)
         elif isinstance(layer, nn.Linear):
             dp_layer = DpLinear(layer)
-            dp_layer.compute_bound(dp_layers[-1].bounds)
-            dp_layers.append(dp_layer)
-            dp_layer.bounds = deeppoly_backsub(dp_layers)
         elif isinstance(layer, nn.ReLU):
             dp_layer = DpRelu(layer)
-            dp_layer.compute_constraints(dp_layers[-1].bounds)
-            dp_layers.append(dp_layer)
+
+        dp_layer.compute_bound(dp_layers[-1].bounds)
+        dp_layers.append(dp_layer)
+        if not isinstance(layer, nn.Flatten):
             dp_layer.bounds = deeppoly_backsub(dp_layers)
+
         logger.debug(f'Layer {i + 1} {layer}')
         logger.debug(f'lb: shape [{dp_layer.bounds.lb.shape}], min: {dp_layer.bounds.lb.min()}, max: {dp_layer.bounds.lb.max()}')
         logger.debug(f'ub: shape [{dp_layer.bounds.ub.shape}], min: {dp_layer.bounds.ub.min()}, max: {dp_layer.bounds.ub.max()}')
-    
+
     if le_layer is not None:
-        le_layer.compute_constraints(dp_layers[-1].bounds)
+        le_layer.compute_bound(dp_layers[-1].bounds)
         dp_layers.append(le_layer)
         le_layer.bounds = deeppoly_backsub(dp_layers)
+
         logger.debug(f'Layer {len(dp_layers) - 1} [{le_layer}]:')
         logger.debug(f'lb: shape [{le_layer.bounds.lb.shape}], min: {le_layer.bounds.lb.min()}, max: {le_layer.bounds.lb.max()}')
         logger.debug(f'ub: shape [{le_layer.bounds.ub.shape}], min: {le_layer.bounds.ub.min()}, max: {le_layer.bounds.ub.max()}')
+
     return dp_layers
 
-def certify_sample(model, x, y, eps, use_le=True) -> bool: 
-    
+def certify_sample(model, x, y, eps, use_le=True) -> bool:
+
     if x.dim() == 3:
         x = x.unsqueeze(0)
-    
+
     if use_le:
         n_classes = model[-1].out_features
         le_layer = DiffLayer(y, n_classes)
         dp_layers = propagate_sample(model, x, eps, le_layer)
-    else:   
+    else:
         dp_layers = propagate_sample(model, x, eps)
-        
+
     bounds = dp_layers[-1].bounds
-    
+
     if use_le:
         return check_postcondition_le(bounds)
     else:
         check_postcondition(y, bounds)
-
-if __name__ == "__main__":
-    
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    # Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
-    logger = logging.getLogger(__name__)
-    
-    import argparse
-    parser = argparse.ArgumentParser(
-        description="Neural Network Verification Example"
-    )
-    parser.add_argument(
-        "--weight",
-        type=float,
-        required=False,
-        help="Neural network weight parameter value",
-    )
-    
-    args = parser.parse_args()
-    weight = args.weight if args.weight is not None else 2.0
-    
-    def sample():
-        """
-        linear = nn.Linear(3, 2)
-        linear.weight.data = torch.tensor([[2, 1, -7], [1, 3, 1]], dtype=torch.float)
-        linear.bias.data = torch.tensor([3, -5], dtype=torch.float)
-        leaky = nn.LeakyReLU(negative_slope=0.5)
-        flatten = nn.Flatten()
-        model = nn.Sequential(linear, leaky, flatten)
-        x = torch.tensor([[[1, 0, 0], [1, 0, 1], [0, 1, 1]]], dtype=torch.float)
-        """
-        # The example we did in class
-        linear1 = nn.Linear(2, 2)
-        linear1.weight.data = torch.tensor([[1, 1], [1, -1]], dtype=torch.float)
-        linear1.bias.data = torch.tensor([0, 0], dtype=torch.float)
-        relu1 = nn.ReLU()
-        linear2 = nn.Linear(2, 2)
-        linear2.weight.data = torch.tensor([[1, 1], [1, -1]], dtype=torch.float)
-        linear2.bias.data = torch.tensor([-0.5, 0], dtype=torch.float)
-        relu2 = nn.ReLU()
-        linear3 = nn.Linear(2, 2)
-        linear3.weight.data = torch.tensor([[-1, 1], [0, 1]], dtype=torch.float)
-        linear3.bias.data = torch.tensor([3, 0], dtype=torch.float)
-        flatten = nn.Flatten()
-        model = nn.Sequential(linear1, relu1, linear2, relu2, linear3)
-        model.eval()
-
-        x = torch.tensor([[0, 0]])
-        eps = 1.0
-
-        dp_layers = propagate_sample(model, x, eps, min_val=-1, max_val=1)
-        if check_postcondition(0, dp_layers[-1].bounds):
-            print("Verified")
-        else:
-            print("Failed")
-        bounds = deeppoly_backsub(dp_layers)
-        if check_postcondition(0, bounds):
-            print("Verified")
-        else:
-            print("Failed")
-            
-    def simulate(w):
-
-        flatten = nn.Flatten()
-        linear1 = nn.Linear(1, 2)
-        linear1.weight.data = torch.tensor([[1], [1]], dtype=torch.float)
-        linear1.bias.data = torch.tensor([w, w], dtype=torch.float)
-        relu1 = nn.ReLU()
-        linear2 = nn.Linear(2, 2)
-        linear2.weight.data = torch.tensor([[1, 0], [-1, 2]], dtype=torch.float)
-        linear2.bias.data = torch.tensor([1, 0], dtype=torch.float)
-        model = nn.Sequential(flatten, linear1, relu1, linear2)
-        model.eval()
-
-        x = torch.tensor([[0]])
-        eps = 1.0
-
-        print()
-        dp_layers = propagate_sample(model, x, eps, min_val=-1, max_val=1)
-        bounds = deeppoly_backsub(dp_layers)
-        
-        lb = bounds.lb.flatten()
-        ub = bounds.ub.flatten()
-        return ub[1].item()
-    
-    def plot_upper_bounds():
-        w_vals = np.linspace(-3, 5, 500)
-        ub_vals = []
-        for w in w_vals:
-            ub_vals.append(simulate(w))
-        plt.plot(w_vals, ub_vals)
-        plt.show()
-
-    sample()

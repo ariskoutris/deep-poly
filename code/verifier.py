@@ -53,14 +53,14 @@ def main():
 
     net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)
     logging.info(net)
-    
+
     image_name = args.spec.split('/')[-1]
     with open('test_cases/gt.txt', 'r') as file:
         for line in file:
             row = line.strip().split(',')
             if row[0] == args.net and row[1] == image_name:
                 verified_status = (row[2] == 'verified')
-                break 
+                break
 
 
     image = image.to(DEVICE)
