@@ -126,7 +126,7 @@ class DpRelu():
         lr[mask_lower] = 1
         lo = torch.zeros_like(bounds.lb)
 
-        self.constraints = DpConstraints(torch.diag(lr[0]), torch.diag(ur[0]), lo, uo)
+        self.constraints = DpConstraints(torch.diag(lr.flatten()), torch.diag(ur.flatten()), lo, uo)
 
     def compute_bound(self, bounds: DpBounds):
 
