@@ -83,12 +83,28 @@ class AbstractBox:
         try:
             target = y.item()
         except AttributeError:
-            target = y 
-        target_lb = self.lb[0][target].item()
-        for i in range(self.ub.shape[-1]):
-            if i != target and self.ub[0][i] >= target_lb:
-                return False
-        return True
+            target = y
+
+        lb = self.lb[0]
+        ub = self.ub[0]
+        
+        target_lb = lb[target].item()
+        min_interval = ub.max() - lb.min()
+        
+        logger.debug(
+            f'\nCertification Result\n'
+            f'Target Label is {target} with [LB: {target_lb}, UB: {ub[target].item()}]\n'
+            f'All Lower Bounds: {lb.tolist()}\n'
+            f'All Upper Bounds: {lb.tolist()}\n'
+        )
+
+        out = True
+        for i in range(ub.shape[0]):
+            if i != target and ub[i] >= target_lb:
+                out = False
+            if i != target:
+                min_interval = min(min_interval, target_lb - ub[i])
+        logger.info(f'Certification Distance: {min_interval}\n')
 
 def propagate_sample(model, x, eps, min_val=0, max_val=1) -> AbstractBox:
     box = AbstractBox.construct_initial_box(x, eps, min_val, max_val)
@@ -106,7 +122,8 @@ def propagate_sample(model, x, eps, min_val=0, max_val=1) -> AbstractBox:
             box = box.propagate_relu(layer)
         else:
             raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
-        logger.debug(f'Layer {i}: {box.lb.detach()} {box.ub.detach()} || [{type(layer)}]')
+        logger.debug(f'Layer {i} [{layer}]')
+        logger.debug(f'\n\t{box.lb.detach().numpy()}\n\t{box.ub.detach().numpy()}')
     return box
 
 def propagate_sample_LE(model, x, eps, C=None, min_val=0, max_val=1) -> AbstractBox:
@@ -143,6 +160,11 @@ def certify_sample_LE(model, x, y, eps) -> bool:
 
 if __name__ == "__main__":
     
+    import logging
+    # Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
+    logger = logging.getLogger(__name__)
+    
     import argparse
     parser = argparse.ArgumentParser(
         description="Neural Network Verification Example"
@@ -156,6 +178,42 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     weight = args.weight if args.weight is not None else 2.0
+    
+    def sample():
+        """
+        linear = nn.Linear(3, 2)
+        linear.weight.data = torch.tensor([[2, 1, -7], [1, 3, 1]], dtype=torch.float)
+        linear.bias.data = torch.tensor([3, -5], dtype=torch.float)
+        leaky = nn.LeakyReLU(negative_slope=0.5)
+        flatten = nn.Flatten()
+        model = nn.Sequential(linear, leaky, flatten)
+        x = torch.tensor([[[1, 0, 0], [1, 0, 1], [0, 1, 1]]], dtype=torch.float)
+        """
+        # The example we did in class
+        linear1 = nn.Linear(2, 2)
+        linear1.weight.data = torch.tensor([[1, 1], [1, -1]], dtype=torch.float)
+        linear1.bias.data = torch.tensor([0, 0], dtype=torch.float)
+        relu1 = nn.ReLU()
+        linear2 = nn.Linear(2, 2)
+        linear2.weight.data = torch.tensor([[1, 1], [1, -1]], dtype=torch.float)
+        linear2.bias.data = torch.tensor([-0.5, 0], dtype=torch.float)
+        relu2 = nn.ReLU()
+        linear3 = nn.Linear(2, 2)
+        linear3.weight.data = torch.tensor([[-1, 1], [0, 1]], dtype=torch.float)
+        linear3.bias.data = torch.tensor([3, 0], dtype=torch.float)
+        flatten = nn.Flatten()
+        model = nn.Sequential(linear1, relu1, linear2, relu2, linear3)
+        model.eval()
+
+
+        x = torch.tensor([[0, 0]])
+        eps = 1.0
+
+        box = propagate_sample(model, x, eps, min_val=-1, max_val=1)
+        if box.check_postcondition(0):
+            print("Verified")
+
+    sample()
 
     def simulate(w):
 
@@ -180,14 +238,14 @@ if __name__ == "__main__":
         ub = box.ub.flatten()
         return ub[1].item()
 
-    import numpy as np
-    import matplotlib.pyplot as plt
+    # import numpy as np
+    # import matplotlib.pyplot as plt
 
-    w_vals = np.linspace(-3, 5, 50)
-    ub_vals = []
-    for w in w_vals:
-        ub_vals.append(simulate(w))
-    plt.plot(w_vals, ub_vals)
-    plt.show()
+    # w_vals = np.linspace(-3, 5, 50)
+    # ub_vals = []
+    # for w in w_vals:
+    #     ub_vals.append(simulate(w))
+    # plt.plot(w_vals, ub_vals)
+    # plt.show()
     
-    #simulate(weight)
+    # simulate(weight)
