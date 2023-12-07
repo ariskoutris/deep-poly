@@ -132,7 +132,7 @@ class DpRelu():
 
         # For now use the x >= 0 constraint for lower relu
         lr = torch.zeros_like(bounds.lb)
-        lr[mask_crossing] = torch.where(-bounds.lb < bounds.ub, 0.0, 0.0)[mask_crossing]
+        lr[mask_crossing] = torch.where(-bounds.lb < bounds.ub, 1.0, 0.0)[mask_crossing]
         lr[mask_lower] = 1
         lo = torch.zeros_like(bounds.lb)
 
@@ -214,7 +214,6 @@ def deeppoly_backsub(dp_layers):
     constraints_acc = dp_layers[-1].constraints.copy()
     constraints_acc.ur = constraints_acc.ur.t()
     constraints_acc.lr = constraints_acc.lr.t()
-    logger.info("BACKWARD PROPAGATION")
     logger.debug(f'Last Layer:\n{str(constraints_acc)}')
     for i, layer in enumerate(reversed(dp_layers[:-1])):
         if isinstance(layer, DpLinear):
@@ -225,57 +224,27 @@ def deeppoly_backsub(dp_layers):
             constraints_acc = layer.backsub(constraints_acc)
         elif isinstance(layer, DpConv):
             pass
-        elif isinstance(layer, DpInput):
-            
-            constraints_acc_ur_pos = torch.relu(constraints_acc.ur).view(-1, constraints_acc.ur.size(-1))
-            constraints_acc_ur_neg = -torch.relu(-constraints_acc.ur).view(-1, constraints_acc.ur.size(-1))
-            constraints_acc_lr_neg = -torch.relu(-constraints_acc.lr).view(-1, constraints_acc.lr.size(-1))
-            constraints_acc_lr_pos = torch.relu(constraints_acc.lr).view(-1, constraints_acc.lr.size(-1))
-            lb_in = layer.bounds.lb
-            ub_in = layer.bounds.ub
-            lb_in_reshaped = lb_in.view(1, -1)
-            ub_in = ub_in.view(1, -1)
-            lb = lb_in_reshaped @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
-            ub = ub_in @ constraints_acc_ur_pos + lb_in_reshaped @ constraints_acc_ur_neg + constraints_acc.uo 
+        elif isinstance(layer, DpInput):  
+            ur = constraints_acc.ur.flatten(1, -2).squeeze(0)
+            lr = constraints_acc.lr.flatten(1, -2).squeeze(0)
+            lb_in = layer.bounds.lb.flatten(1)
+            ub_in = layer.bounds.ub.flatten(1)
+            constraints_acc_ur_pos = torch.relu(ur)
+            constraints_acc_ur_neg = -torch.relu(-ur)
+            constraints_acc_lr_pos = torch.relu(lr)
+            constraints_acc_lr_neg = -torch.relu(-lr)
+            lb = lb_in @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
+            ub = ub_in @ constraints_acc_ur_pos + lb_in @ constraints_acc_ur_neg + constraints_acc.uo 
             lb = lb.squeeze(0)
             ub = ub.squeeze(0)
         logger.debug(f'Layer {len(dp_layers) - 2 - i} [{layer.layer}]:')
         logger.debug(str(constraints_acc))
     return DpBounds(lb, ub)
 
-def deeppoly_backsub_aux(dp_layers, constraints_acc: DpConstraints):
-    logger.info("BACKWARD PROPAGATION")
-    logger.debug(f'Last Layer:\n{constraints_acc}')
-    for i, layer in enumerate(reversed(dp_layers[:-1])):
-        if isinstance(layer, DpLinear):
-            constraints_acc = layer.backsub(constraints_acc)
-        elif isinstance(layer, DpFlatten):
-            constraints_acc = layer.backsub(constraints_acc)
-        elif isinstance(layer, DpRelu):
-            constraints_acc = layer.backsub(constraints_acc)
-        elif isinstance(layer, DpConv):
-            pass
-        elif isinstance(layer, DpInput):
-            constraints_acc_ur_pos = torch.relu(constraints_acc.ur)
-            constraints_acc_ur_neg = -torch.relu(-constraints_acc.ur)
-            constraints_acc_lr_neg = -torch.relu(-constraints_acc.lr)
-            constraints_acc_lr_pos = torch.relu(constraints_acc.lr)
-            lb_in = dp_layers[0].bounds.lb
-            ub_in = dp_layers[0].bounds.ub
-            lb = lb_in @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
-            ub = ub_in @ constraints_acc_ur_pos + lb_in @ constraints_acc_ur_neg + constraints_acc.uo 
-        logger.debug(f'Layer {len(dp_layers) - 2 - i} [{layer.layer}]:')
-        logger.debug(str(constraints_acc))
-
-    return DpBounds(lb, ub)
-
 def propagate_sample(model, x, eps, min_val=0, max_val=1):
-
     bounds = get_input_bounds(x, eps, min_val, max_val)
     input_layer = DpInput(bounds)
     dp_layers = [input_layer]
-    logger.info("FORWARD PROPAGATION")
-    #logger.debug(f'Input Layer:\n\t{input_layer.bounds.lb.numpy()} {input_layer.bounds.ub.numpy()}')
     logger.debug(f'Input Layer')
     logger.debug(f'lb: shape [{input_layer.bounds.lb.shape}], min: {input_layer.bounds.lb.min()}, max: {input_layer.bounds.lb.max()}')
     logger.debug(f'ub: shape [{input_layer.bounds.ub.shape}], min: {input_layer.bounds.ub.min()}, max: {input_layer.bounds.ub.max()}')
@@ -291,10 +260,10 @@ def propagate_sample(model, x, eps, min_val=0, max_val=1):
             dp_layer.bounds = deeppoly_backsub(dp_layers)
         elif isinstance(layer, nn.ReLU):
             dp_layer = DpRelu(layer)
-            dp_layer.compute_bound(dp_layers[-1].bounds)
+            #dp_layer.compute_bound(dp_layers[-1].bounds)
+            dp_layer.compute_constraints(dp_layers[-1].bounds)
             dp_layers.append(dp_layer)
-            #dp_layer.bounds = deeppoly_backsub_aux(dp_layers, dp_layer.constraints)
-        #logger.debug(f'Layer {i + 1} {layer}:\n\t{dp_layer.bounds.lb.numpy()} {dp_layer.bounds.ub.numpy()}\t\t\t')
+            dp_layer.bounds = deeppoly_backsub(dp_layers)
         logger.debug(f'Layer {i + 1} {layer}')
         logger.debug(f'lb: shape [{dp_layer.bounds.lb.shape}], min: {dp_layer.bounds.lb.min()}, max: {dp_layer.bounds.lb.max()}')
         logger.debug(f'ub: shape [{dp_layer.bounds.ub.shape}], min: {dp_layer.bounds.ub.min()}, max: {dp_layer.bounds.ub.max()}')
@@ -302,8 +271,6 @@ def propagate_sample(model, x, eps, min_val=0, max_val=1):
 
 def certify_sample(model, x, y, eps) -> bool:
     dp_layers = propagate_sample(model, x, eps)
-    if check_postcondition(y, dp_layers[-1].bounds):
-        return True
     bounds = deeppoly_backsub(dp_layers)
     return check_postcondition(y, bounds)
 
