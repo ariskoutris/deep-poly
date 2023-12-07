@@ -28,6 +28,9 @@ class DpConstraints:
         out += f"uo: shape [{self.uo.shape}], min: {self.uo.min()}, max: {self.uo.max()}\n"
         return out
 
+    def copy(self):
+        return DpConstraints(self.lr.clone(), self.ur.clone(), self.lo.clone(), self.uo.clone())
+
 class DpBounds:
     def __init__(self, lb: torch.Tensor, ub: torch.Tensor):
         self.lb = lb
@@ -47,18 +50,18 @@ class DpLinear():
 
     def __init__(self, layer : nn.Linear):
         self.layer = layer
-        lr = layer.weight.detach().t()
-        ur = layer.weight.detach().t()
+        lr = layer.weight.detach()
+        ur = layer.weight.detach()
         lo = layer.bias.detach()
         uo = layer.bias.detach()
         self.constraints = DpConstraints(lr, ur, lo, uo)
 
     def compute_bound(self, bounds: DpBounds):
         
-        lr_pos = torch.relu(self.constraints.lr)
-        lr_neg = -torch.relu(-self.constraints.lr)
-        ur_pos = torch.relu(self.constraints.ur)
-        ur_neg = -torch.relu(-self.constraints.ur)
+        lr_pos = torch.relu(self.constraints.lr).t()
+        lr_neg = -torch.relu(-self.constraints.lr).t()
+        ur_pos = torch.relu(self.constraints.ur).t()
+        ur_neg = -torch.relu(-self.constraints.ur).t()
         
         lb = bounds.lb @ lr_pos + bounds.ub @ lr_neg + self.constraints.lo
         ub = bounds.ub @ ur_pos + bounds.lb @ ur_neg + self.constraints.uo
@@ -71,9 +74,9 @@ class DpLinear():
         accum_c_lr_neg = -torch.relu(-accum_c.lr)
         accum_c_ur_pos = torch.relu(accum_c.ur)
         accum_c_ur_neg = -torch.relu(-accum_c.ur)
-        
-        lr =  self.constraints.lr @ accum_c_lr_pos +  self.constraints.ur @ accum_c_lr_neg
-        ur =  self.constraints.ur @ accum_c_ur_pos +  self.constraints.lr @ accum_c_ur_neg
+
+        lr =  self.constraints.lr.t() @ accum_c_lr_pos +  self.constraints.ur.t() @ accum_c_lr_neg
+        ur =  self.constraints.ur.t() @ accum_c_ur_pos +  self.constraints.lr.t() @ accum_c_ur_neg
 
         lo = self.constraints.lo @ accum_c_lr_pos + self.constraints.uo @ accum_c_lr_neg
         uo = self.constraints.uo @ accum_c_ur_pos + self.constraints.lo @ accum_c_ur_neg
@@ -95,6 +98,8 @@ class DpFlatten():
     def backsub(self, constraints: DpConstraints):
         lr = constraints.lr.reshape((*self.input_shape, *constraints.lr.shape[1:]))
         ur = constraints.ur.reshape((*self.input_shape, *constraints.ur.shape[1:]))
+        #lr = constraints.lr.clone()
+        #ur = constraints.ur.clone()
         return DpConstraints(lr, ur, constraints.lo, constraints.uo)
 
 class DpRelu():
@@ -206,7 +211,9 @@ def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
     return DpBounds(lb, ub)
 
 def deeppoly_backsub(dp_layers):
-    constraints_acc = dp_layers[-1].constraints
+    constraints_acc = dp_layers[-1].constraints.copy()
+    constraints_acc.ur = constraints_acc.ur.t()
+    constraints_acc.lr = constraints_acc.lr.t()
     logger.info("BACKWARD PROPAGATION")
     logger.debug(f'Last Layer:\n{str(constraints_acc)}')
     for i, layer in enumerate(reversed(dp_layers[:-1])):
@@ -219,14 +226,19 @@ def deeppoly_backsub(dp_layers):
         elif isinstance(layer, DpConv):
             pass
         elif isinstance(layer, DpInput):
-            constraints_acc_ur_pos = torch.relu(constraints_acc.ur)
-            constraints_acc_ur_neg = -torch.relu(-constraints_acc.ur)
-            constraints_acc_lr_neg = -torch.relu(-constraints_acc.lr)
-            constraints_acc_lr_pos = torch.relu(constraints_acc.lr)
-            lb_in = dp_layers[0].bounds.lb
-            ub_in = dp_layers[0].bounds.ub
-            lb = lb_in @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
-            ub = ub_in @ constraints_acc_ur_pos + lb_in @ constraints_acc_ur_neg + constraints_acc.uo 
+            
+            constraints_acc_ur_pos = torch.relu(constraints_acc.ur).view(-1, constraints_acc.ur.size(-1))
+            constraints_acc_ur_neg = -torch.relu(-constraints_acc.ur).view(-1, constraints_acc.ur.size(-1))
+            constraints_acc_lr_neg = -torch.relu(-constraints_acc.lr).view(-1, constraints_acc.lr.size(-1))
+            constraints_acc_lr_pos = torch.relu(constraints_acc.lr).view(-1, constraints_acc.lr.size(-1))
+            lb_in = layer.bounds.lb
+            ub_in = layer.bounds.ub
+            lb_in_reshaped = lb_in.view(1, -1)
+            ub_in = ub_in.view(1, -1)
+            lb = lb_in_reshaped @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
+            ub = ub_in @ constraints_acc_ur_pos + lb_in_reshaped @ constraints_acc_ur_neg + constraints_acc.uo 
+            lb = lb.squeeze(0)
+            ub = ub.squeeze(0)
         logger.debug(f'Layer {len(dp_layers) - 2 - i} [{layer.layer}]:')
         logger.debug(str(constraints_acc))
     return DpBounds(lb, ub)
@@ -276,7 +288,7 @@ def propagate_sample(model, x, eps, min_val=0, max_val=1):
             dp_layer = DpLinear(layer)
             dp_layer.compute_bound(dp_layers[-1].bounds)
             dp_layers.append(dp_layer)
-            #dp_layer.bounds = deeppoly_backsub_aux(dp_layers, dp_layer.constraints)
+            dp_layer.bounds = deeppoly_backsub(dp_layers)
         elif isinstance(layer, nn.ReLU):
             dp_layer = DpRelu(layer)
             dp_layer.compute_bound(dp_layers[-1].bounds)

@@ -3,12 +3,12 @@ import torch
 
 from networks import get_network
 from utils.loading import parse_spec
-import deeppoly
+import deeppoly, box
 
 import logging
 
 # Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
 
 DEVICE = "cpu"
 LOG = True
