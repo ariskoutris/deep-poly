@@ -110,7 +110,7 @@ class DpRelu():
         mask_lower = bounds.lb >= 0
         # ub >= 0 >= lb
         mask_crossing =  ~(mask_lower | mask_upper)
-        assert (mask_crossing | mask_upper | mask_lower).all()
+        assert (mask_crossing & mask_upper & mask_lower == False).all()
 
         ur = torch.zeros_like(bounds.ub)
         ur[mask_crossing] = self.slope[mask_crossing]
