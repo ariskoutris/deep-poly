@@ -16,13 +16,6 @@ class DpConstraints:
     def __repr__(self):
         pass
     
-    # def __str__(self):
-    #     out = "\t" + str(self.lr).replace("\n", "\n\t") + "\n"
-    #     out += "\t" + str(self.ur).replace("\n", "\n\t") + "\n"
-    #     out += "\t" + str(self.lo).replace("\n", "\n\t") + "\n"
-    #     out += "\t" + str(self.uo).replace("\n", "\n\t") + "\n"
-    #     return out
-    
     def __str__(self):
         out =  "\tlr: " + str(self.lr).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
         out += "\tur: " + str(self.ur).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
