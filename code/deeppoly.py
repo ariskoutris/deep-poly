@@ -255,8 +255,8 @@ def deeppoly_backsub(dp_layers):
         elif isinstance(layer, DpConv):
             pass
         elif isinstance(layer, DpInput):  
-            ur = constraints_acc.ur.flatten(1, -2).squeeze(0)
-            lr = constraints_acc.lr.flatten(1, -2).squeeze(0)
+            ur = constraints_acc.ur.flatten(1, -2)
+            lr = constraints_acc.lr.flatten(1, -2)
             lb_in = layer.bounds.lb.flatten(1)
             ub_in = layer.bounds.ub.flatten(1)
             constraints_acc_ur_pos = torch.relu(ur)
@@ -307,7 +307,10 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1):
     return dp_layers
 
 def certify_sample(model, x, y, eps, use_le=True) -> bool: 
-   
+    
+    if x.dim() == 3:
+        x = x.unsqueeze(0)
+    
     if use_le:
         n_classes = model[-1].out_features
         le_layer = DiffLayer(y, n_classes)
