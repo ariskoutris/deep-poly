@@ -98,8 +98,6 @@ class DpFlatten():
     def backsub(self, constraints: DpConstraints):
         lr = constraints.lr.reshape((*self.input_shape, *constraints.lr.shape[1:]))
         ur = constraints.ur.reshape((*self.input_shape, *constraints.ur.shape[1:]))
-        #lr = constraints.lr.clone()
-        #ur = constraints.ur.clone()
         return DpConstraints(lr, ur, constraints.lo, constraints.uo)
 
 class DpRelu():
@@ -169,7 +167,6 @@ class DpRelu():
 
         return DpConstraints(lr, ur, lo, uo)
 
-
 class DpConv():
     def __init__(self, layer : nn.Conv2d):
         self.layer = layer
@@ -198,9 +195,6 @@ def check_postcondition(y, bounds: DpBounds) -> bool:
     logger.info(f'Certification Distance: {min_interval}\n')
     return out
 
-
-# Function to get the 0th deepoly object with the initial bounds
-# and the upper + lower identity constra
 def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
     lb = (x - eps).to(torch.float)
     lb.clamp_(min=min_val, max=max_val)
@@ -260,7 +254,6 @@ def propagate_sample(model, x, eps, min_val=0, max_val=1):
             dp_layer.bounds = deeppoly_backsub(dp_layers)
         elif isinstance(layer, nn.ReLU):
             dp_layer = DpRelu(layer)
-            #dp_layer.compute_bound(dp_layers[-1].bounds)
             dp_layer.compute_constraints(dp_layers[-1].bounds)
             dp_layers.append(dp_layer)
             dp_layer.bounds = deeppoly_backsub(dp_layers)
@@ -276,7 +269,9 @@ def certify_sample(model, x, y, eps) -> bool:
 
 if __name__ == "__main__":
     
-    import logging
+    import numpy as np
+    import matplotlib.pyplot as plt
+
     # Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
     logger = logging.getLogger(__name__)
@@ -321,32 +316,6 @@ if __name__ == "__main__":
         model = nn.Sequential(linear1, relu1, linear2, relu2, linear3)
         model.eval()
 
-    def sample():
-        """
-        linear = nn.Linear(3, 2)
-        linear.weight.data = torch.tensor([[2, 1, -7], [1, 3, 1]], dtype=torch.float)
-        linear.bias.data = torch.tensor([3, -5], dtype=torch.float)
-        leaky = nn.LeakyReLU(negative_slope=0.5)
-        flatten = nn.Flatten()
-        model = nn.Sequential(linear, leaky, flatten)
-        x = torch.tensor([[[1, 0, 0], [1, 0, 1], [0, 1, 1]]], dtype=torch.float)
-        """
-        # The example we did in class
-        linear1 = nn.Linear(2, 2)
-        linear1.weight.data = torch.tensor([[1, 1], [1, -1]], dtype=torch.float)
-        linear1.bias.data = torch.tensor([0, 0], dtype=torch.float)
-        relu1 = nn.ReLU()
-        linear2 = nn.Linear(2, 2)
-        linear2.weight.data = torch.tensor([[1, 1], [1, -1]], dtype=torch.float)
-        linear2.bias.data = torch.tensor([-0.5, 0], dtype=torch.float)
-        relu2 = nn.ReLU()
-        linear3 = nn.Linear(2, 2)
-        linear3.weight.data = torch.tensor([[-1, 1], [0, 1]], dtype=torch.float)
-        linear3.bias.data = torch.tensor([3, 0], dtype=torch.float)
-        flatten = nn.Flatten()
-        model = nn.Sequential(linear1, relu1, linear2, relu2, linear3)
-        model.eval()
-        
         x = torch.tensor([[0, 0]])
         eps = 1.0
 
@@ -360,9 +329,7 @@ if __name__ == "__main__":
             print("Verified")
         else:
             print("Failed")
-
-    sample()
-    
+            
     def simulate(w):
 
         flatten = nn.Flatten()
@@ -386,15 +353,13 @@ if __name__ == "__main__":
         lb = bounds.lb.flatten()
         ub = bounds.ub.flatten()
         return ub[1].item()
-
-    # import numpy as np
-    # import matplotlib.pyplot as plt
-
-    # w_vals = np.linspace(-3, 5, 500)
-    # ub_vals = []
-    # for w in w_vals:
-    #     ub_vals.append(simulate(w))
-    # plt.plot(w_vals, ub_vals)
-    # plt.show()
     
-    # simulate(weight)
+    def plot_upper_bounds():
+        w_vals = np.linspace(-3, 5, 500)
+        ub_vals = []
+        for w in w_vals:
+            ub_vals.append(simulate(w))
+        plt.plot(w_vals, ub_vals)
+        plt.show()
+
+    sample()
