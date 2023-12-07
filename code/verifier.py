@@ -5,6 +5,11 @@ from networks import get_network
 from utils.loading import parse_spec
 import deeppoly
 
+import logging
+
+# Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
+
 DEVICE = "cpu"
 LOG = True
 
@@ -44,12 +49,19 @@ def main():
 
     true_label, dataset, image, eps = parse_spec(args.spec)
 
-    if LOG:
-        print(f"Verifying {args.spec} (model={args.net}, epsilon={eps}, true_label={true_label})")
+    logging.info(f"Verifying {args.spec} (model={args.net}, epsilon={eps}, true_label={true_label})")
 
     net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)
-    if LOG:
-        print(net)
+    logging.info(net)
+    
+    image_name = args.spec.split('/')[-1]
+    with open('test_cases/gt.txt', 'r') as file:
+        for line in file:
+            row = line.strip().split(',')
+            if row[0] == args.net and row[1] == image_name:
+                verified_status = (row[2] == 'verified')
+                break 
+
 
     image = image.to(DEVICE)
     out = net(image.unsqueeze(0))
@@ -57,9 +69,13 @@ def main():
     assert pred_label == true_label
 
     if analyze(net, image, eps, true_label):
-        print("verified")
+        status_msg = "Verified\t"
+        status_msg += '✅' if verified_status else '🛑 (❗️)'
+        print(status_msg)
     else:
-        print("not verified")
+        status_msg = "Not Verified\t"
+        status_msg += u'🛑' if verified_status else '✅'
+        print(status_msg)
 
 
 if __name__ == "__main__":

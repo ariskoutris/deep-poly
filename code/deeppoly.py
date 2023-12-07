@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+import logging
+logger = logging.getLogger(__name__)
+
 class DpConstraints:
 
     def __init__(self, lr: torch.Tensor, ur: torch.Tensor, lo: torch.Tensor, uo: torch.Tensor):
@@ -171,12 +174,26 @@ def check_postcondition(y, bounds: DpBounds) -> bool:
 
     lb = bounds.lb.flatten()
     ub = bounds.ub.flatten()
-
+    
     target_lb = lb[target].item()
+    min_interval = ub.max() - lb.min()
+    
+    logger.debug(
+        f'\nCertification Result\n'
+        f'Target Label is {target} with [LB: {target_lb}, UB: {ub[target].item()}]\n'
+        f'All Lower Bounds: {lb.tolist()}\n'
+        f'All Upper Bounds: {lb.tolist()}\n'
+    )
+
+    out = True
     for i in range(ub.shape[0]):
         if i != target and ub[i] >= target_lb:
-            return False
-    return True
+            out = False
+        if i != target:
+            min_interval = min(min_interval, target_lb - ub[i])
+    logger.info(f'Certification Distance: {min_interval}\n')
+    return out
+
 
 # Function to get the 0th deepoly object with the initial bounds
 # and the upper + lower identity constra
@@ -191,8 +208,8 @@ def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
 
 def deeppoly_backsub(dp_layers):
     constraints_acc = dp_layers[-1].constraints
-    print("BACKWARD PROPAGATION")
-    print(f'Last Layer:\n{constraints_acc}')
+    logger.info("BACKWARD PROPAGATION")
+    logger.debug(f'Last Layer:\n{constraints_acc}')
     for i, layer in enumerate(reversed(dp_layers[:-1])):
         if isinstance(layer, DpLinear):
             constraints_acc = layer.backsub(constraints_acc)
@@ -211,8 +228,8 @@ def deeppoly_backsub(dp_layers):
             ub_in = dp_layers[0].bounds.ub
             lb = lb_in @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
             ub = ub_in @ constraints_acc_ur_pos + lb_in @ constraints_acc_ur_neg + constraints_acc.uo 
-        print(f'Layer {len(dp_layers) - i} [{layer.layer}]:')
-        print(constraints_acc)
+        logger.debug(f'Layer {len(dp_layers) - i} [{layer.layer}]:')
+        logger.debug(constraints_acc)
 
     return DpBounds(lb, ub)
 
@@ -221,8 +238,8 @@ def propagate_sample(model, x, eps, min_val=0, max_val=1):
     bounds = get_input_bounds(x, eps, min_val, max_val)
     input_layer = DpInput(bounds)
     dp_layers = [input_layer]
-    print("FORWARD PROPAGATION")
-    print(f'Input Layer:\n\t{input_layer.bounds.lb.numpy()} {input_layer.bounds.ub.numpy()}')
+    logger.info("FORWARD PROPAGATION")
+    logger.debug(f'Input Layer:\n\t{input_layer.bounds.lb.numpy()} {input_layer.bounds.ub.numpy()}')
     for i, layer in enumerate(model):
         if isinstance(layer, nn.Flatten):
             dp_layer = DpFlatten(layer)
@@ -236,7 +253,7 @@ def propagate_sample(model, x, eps, min_val=0, max_val=1):
             dp_layer = DpRelu(layer)
             dp_layer.compute_bound(dp_layers[-1].bounds)
             dp_layers.append(dp_layer)
-        print(f'Layer {i} {layer}:\n\t{dp_layer.bounds.lb.numpy()} {dp_layer.bounds.ub.numpy()}\t\t\t')
+        logger.debug(f'Layer {i} {layer}:\n\t{dp_layer.bounds.lb.numpy()} {dp_layer.bounds.ub.numpy()}\t\t\t')
     return dp_layers
 
 def certify_sample(model, x, y, eps) -> bool:
@@ -278,9 +295,8 @@ if __name__ == "__main__":
         x = torch.tensor([[[0]]])
         eps = 1.0
 
-        print(w)
-        dp_layers = propagate_sample(model, x, eps, -1, 1)
         print()
+        dp_layers = propagate_sample(model, x, eps, -1, 1)
         bounds = deeppoly_backsub(dp_layers)
         
         lb = bounds.lb.flatten()

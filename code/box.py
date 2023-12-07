@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 from modules import Normalize, View
 
+import logging
+logger = logging.getLogger(__name__)
+
 def get_C(y_batch, n_class=10):
     def _get_C(n_class, y):
         I = [i for i in range(n_class) if i != y]
@@ -89,7 +92,7 @@ class AbstractBox:
 
 def propagate_sample(model, x, eps, min_val=0, max_val=1) -> AbstractBox:
     box = AbstractBox.construct_initial_box(x, eps, min_val, max_val)
-    print(f'Input Layer: {box.lb} {box.ub}')
+    logger.debug(f'Input Layer: {box.lb} {box.ub}')
     for i, layer in enumerate(model):
         if isinstance(layer, Normalize):
             box = box.propagate_normalize(layer)
@@ -103,12 +106,12 @@ def propagate_sample(model, x, eps, min_val=0, max_val=1) -> AbstractBox:
             box = box.propagate_relu(layer)
         else:
             raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
-        print(f'Layer {i}: {box.lb.detach()} {box.ub.detach()} || [{type(layer)}]')
+        logger.debug(f'Layer {i}: {box.lb.detach()} {box.ub.detach()} || [{type(layer)}]')
     return box
 
 def propagate_sample_LE(model, x, eps, C=None, min_val=0, max_val=1) -> AbstractBox:
     box = AbstractBox.construct_initial_box(x, eps, min_val=min_val, max_val=max_val)
-    print(f'Input Layer: {box.lb} {box.ub}')
+    logger.debug(f'Input Layer: {box.lb} {box.ub}')
     for i, layer in enumerate(model):
         last = i == len(model) - 1
         if isinstance(layer, nn.Linear):
@@ -126,7 +129,7 @@ def propagate_sample_LE(model, x, eps, C=None, min_val=0, max_val=1) -> Abstract
             box = box.propagate_relu(layer)
         else:
             raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
-        print(f'Layer {i}: {box.lb.detach()} {box.ub.detach()} || [{type(layer)}]')
+        logger.debug(f'Layer {i}: {box.lb.detach()} {box.ub.detach()} || [{type(layer)}]')
     return box
 
 def certify_sample(model, x, y, eps) -> bool:

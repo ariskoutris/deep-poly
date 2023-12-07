@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for net in fc_1 fc_2
+for net in fc_base
 do
 	echo Evaluating network ${net}...
 	for spec in `ls test_cases/${net}`
