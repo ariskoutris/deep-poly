@@ -13,6 +13,13 @@ class DpConstraints:
 
     def __repr__(self):
         pass
+    
+    def __str__(self):
+        out = "\t" + str(self.lr).replace("\n", "\n\t") + "\n"
+        out += "\t" + str(self.ur).replace("\n", "\n\t") + "\n"
+        out += "\t" + str(self.lo).replace("\n", "\n\t") + "\n"
+        out += "\t" + str(self.uo).replace("\n", "\n\t") + "\n"
+        return out
 
 class DpBounds:
     def __init__(self, lb: torch.Tensor, ub: torch.Tensor):
@@ -24,6 +31,7 @@ class DpBounds:
 class DpInput():
 
     def __init__(self, bounds: DpBounds):
+        self.layer = None
         self.bounds = bounds
 
 class DpLinear():
@@ -110,7 +118,7 @@ class DpRelu():
 
         # For now use the x >= 0 constraint for lower relu
         lr = torch.zeros_like(bounds.lb)
-        lr[mask_crossing] = torch.where(-bounds.lb < bounds.ub, 0.0, 0.0)[mask_crossing]
+        lr[mask_crossing] = torch.where(-bounds.lb < bounds.ub, 1.0, 0.0)[mask_crossing]
         lr[mask_lower] = 1
         lo = torch.zeros_like(bounds.lb)
 
@@ -183,7 +191,9 @@ def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
 
 def deeppoly_backsub(dp_layers):
     constraints_acc = dp_layers[-1].constraints
-    for layer in reversed(dp_layers[:-1]):
+    print("BACKWARD PROPAGATION")
+    print(f'Last Layer:\n{constraints_acc}')
+    for i, layer in enumerate(reversed(dp_layers[:-1])):
         if isinstance(layer, DpLinear):
             constraints_acc = layer.backsub(constraints_acc)
         elif isinstance(layer, DpFlatten):
@@ -201,16 +211,19 @@ def deeppoly_backsub(dp_layers):
             ub_in = dp_layers[0].bounds.ub
             lb = lb_in @ constraints_acc_lr_pos + ub_in @ constraints_acc_lr_neg + constraints_acc.lo
             ub = ub_in @ constraints_acc_ur_pos + lb_in @ constraints_acc_ur_neg + constraints_acc.uo 
+        print(f'Layer {len(dp_layers) - i} [{layer.layer}]:')
+        print(constraints_acc)
 
     return DpBounds(lb, ub)
 
-def propagate_sample(model, x, eps):
+def propagate_sample(model, x, eps, min_val=0, max_val=1):
 
-    bounds = get_input_bounds(x, eps)
+    bounds = get_input_bounds(x, eps, min_val, max_val)
     input_layer = DpInput(bounds)
     dp_layers = [input_layer]
-
-    for layer in model:
+    print("FORWARD PROPAGATION")
+    print(f'Input Layer:\n\t{input_layer.bounds.lb.numpy()} {input_layer.bounds.ub.numpy()}')
+    for i, layer in enumerate(model):
         if isinstance(layer, nn.Flatten):
             dp_layer = DpFlatten(layer)
             dp_layer.compute_bound(dp_layers[-1].bounds)
@@ -218,13 +231,12 @@ def propagate_sample(model, x, eps):
         elif isinstance(layer, nn.Linear):
             dp_layer = DpLinear(layer)
             dp_layer.compute_bound(dp_layers[-1].bounds)
-            print(dp_layer.bounds.lb.shape)
             dp_layers.append(dp_layer)
         elif isinstance(layer, nn.ReLU):
             dp_layer = DpRelu(layer)
             dp_layer.compute_bound(dp_layers[-1].bounds)
-            print(f'uo shape: {dp_layer.constraints.uo.shape}')
             dp_layers.append(dp_layer)
+        print(f'Layer {i} {layer}:\n\t{dp_layer.bounds.lb.numpy()} {dp_layer.bounds.ub.numpy()}\t\t\t')
     return dp_layers
 
 def certify_sample(model, x, y, eps) -> bool:
@@ -235,16 +247,29 @@ def certify_sample(model, x, y, eps) -> bool:
     return check_postcondition(y, bounds)
 
 if __name__ == "__main__":
+    
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Neural Network Verification Example"
+    )
+    parser.add_argument(
+        "--weight",
+        type=float,
+        required=False,
+        help="Neural network weight parameter value",
+    )
+    
+    args = parser.parse_args()
+    weight = args.weight if args.weight is not None else 2.0
 
     def simulate(w):
 
         flatten = nn.Flatten()
-        linear1 = nn.Linear(3, 6)
-        linear1.weight.data = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=torch.float)
+        linear1 = nn.Linear(1, 2)
         linear1.weight.data = torch.tensor([[1], [1]], dtype=torch.float)
         linear1.bias.data = torch.tensor([w, w], dtype=torch.float)
         relu1 = nn.ReLU()
-        linear2 = nn.Linear(6, 2)
+        linear2 = nn.Linear(2, 2)
         linear2.weight.data = torch.tensor([[1, 0], [-1, 2]], dtype=torch.float)
         linear2.bias.data = torch.tensor([1, 0], dtype=torch.float)
         model = nn.Sequential(flatten, linear1, relu1, linear2)
@@ -253,41 +278,23 @@ if __name__ == "__main__":
         x = torch.tensor([[[0]]])
         eps = 1.0
 
-
-        bounds = get_input_bounds(x, eps, -1, 1)
-        input_layer = DpInput(bounds)
-        dp_layers = [input_layer]
         print(w)
-        for i, layer in enumerate(model):
-            if isinstance(layer, nn.Flatten):
-                dp_layer = DpFlatten(layer)
-                dp_layer.compute_bound(dp_layers[-1].bounds)
-                dp_layers.append(dp_layer)
-            elif isinstance(layer, nn.Linear):
-                dp_layer = DpLinear(layer)
-                dp_layer.compute_bound(dp_layers[-1].bounds)
-                dp_layers.append(dp_layer)
-            elif isinstance(layer, nn.ReLU):
-                dp_layer = DpRelu(layer)
-                dp_layer.compute_bound(dp_layers[-1].bounds)
-                dp_layers.append(dp_layer)
-            print(f'layer {dp_layer.bounds.lb, dp_layer.bounds.ub}')
+        dp_layers = propagate_sample(model, x, eps, -1, 1)
         print()
-
         bounds = deeppoly_backsub(dp_layers)
         
         lb = bounds.lb.flatten()
         ub = bounds.ub.flatten()
         return ub[1].item()
 
-    # import numpy as np
-    # import matplotlib.pyplot as plt
+    import numpy as np
+    import matplotlib.pyplot as plt
 
-    # w_vals = np.linspace(-3, 5, 50)
-    # ub_vals = []
-    # for w in w_vals:
-    #     ub_vals.append(simulate(w))
-    # plt.plot(w_vals, ub_vals)
-    # plt.show()
+    w_vals = np.linspace(-3, 5, 500)
+    ub_vals = []
+    for w in w_vals:
+        ub_vals.append(simulate(w))
+    plt.plot(w_vals, ub_vals)
+    plt.show()
     
-    simulate(0)
+    #simulate(weight)

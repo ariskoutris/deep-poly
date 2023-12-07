@@ -17,12 +17,12 @@ class AbstractBox:
         self.ub = ub
 
     @staticmethod
-    def construct_initial_box(x: torch.Tensor, eps: float) -> 'AbstractBox':
+    def construct_initial_box(x: torch.Tensor, eps: float, min_val: float = 0, max_val: float = 1) -> 'AbstractBox':
         lb = x - eps
-        lb.clamp_(min=0, max=1)
+        lb.clamp_(min=min_val, max=max_val)
 
         ub = x + eps
-        ub.clamp_(min=0, max=1)
+        ub.clamp_(min=min_val, max=max_val)
 
         return AbstractBox(lb, ub)
 
@@ -87,9 +87,10 @@ class AbstractBox:
                 return False
         return True
 
-def propagate_sample(model, x, eps) -> AbstractBox:
-    box = AbstractBox.construct_initial_box(x, eps)
-    for layer in model:
+def propagate_sample(model, x, eps, min_val=0, max_val=1) -> AbstractBox:
+    box = AbstractBox.construct_initial_box(x, eps, min_val, max_val)
+    print(f'Input Layer: {box.lb} {box.ub}')
+    for i, layer in enumerate(model):
         if isinstance(layer, Normalize):
             box = box.propagate_normalize(layer)
         elif isinstance(layer, View):
@@ -102,10 +103,12 @@ def propagate_sample(model, x, eps) -> AbstractBox:
             box = box.propagate_relu(layer)
         else:
             raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
+        print(f'Layer {i}: {box.lb.detach()} {box.ub.detach()} || [{type(layer)}]')
     return box
 
-def propagate_sample_LE(model, x, eps, C=None) -> AbstractBox:
-    box = AbstractBox.construct_initial_box(x, eps)
+def propagate_sample_LE(model, x, eps, C=None, min_val=0, max_val=1) -> AbstractBox:
+    box = AbstractBox.construct_initial_box(x, eps, min_val=min_val, max_val=max_val)
+    print(f'Input Layer: {box.lb} {box.ub}')
     for i, layer in enumerate(model):
         last = i == len(model) - 1
         if isinstance(layer, nn.Linear):
@@ -123,6 +126,7 @@ def propagate_sample_LE(model, x, eps, C=None) -> AbstractBox:
             box = box.propagate_relu(layer)
         else:
             raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
+        print(f'Layer {i}: {box.lb.detach()} {box.ub.detach()} || [{type(layer)}]')
     return box
 
 def certify_sample(model, x, y, eps) -> bool:
@@ -133,3 +137,54 @@ def certify_sample_LE(model, x, y, eps) -> bool:
     C = get_C(y)
     box = propagate_sample_LE(model, x, eps, C=C)
     return (box.lb > 0).all()
+
+if __name__ == "__main__":
+    
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Neural Network Verification Example"
+    )
+    parser.add_argument(
+        "--weight",
+        type=float,
+        required=False,
+        help="Neural network weight parameter value",
+    )
+    
+    args = parser.parse_args()
+    weight = args.weight if args.weight is not None else 2.0
+
+    def simulate(w):
+
+        flatten = nn.Flatten()
+        linear1 = nn.Linear(1, 2)
+        linear1.weight.data = torch.tensor([[1], [1]], dtype=torch.float)
+        linear1.bias.data = torch.tensor([w, w], dtype=torch.float)
+        relu1 = nn.ReLU()
+        linear2 = nn.Linear(2, 2)
+        linear2.weight.data = torch.tensor([[1, 0], [-1, 2]], dtype=torch.float)
+        linear2.bias.data = torch.tensor([1, 0], dtype=torch.float)
+        model = nn.Sequential(flatten, linear1, relu1, linear2)
+        model.eval()
+
+        x = torch.tensor([[[0]]])
+        eps = 1.0
+
+        print(w)
+        box = propagate_sample(model, x, eps, -1, 1)
+
+        lb = box.lb.flatten()
+        ub = box.ub.flatten()
+        return ub[1].item()
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    w_vals = np.linspace(-3, 5, 50)
+    ub_vals = []
+    for w in w_vals:
+        ub_vals.append(simulate(w))
+    plt.plot(w_vals, ub_vals)
+    plt.show()
+    
+    #simulate(weight)
