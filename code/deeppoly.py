@@ -15,17 +15,17 @@ class DpConstraints:
 
     def __repr__(self):
         pass
-    
-    def __str__(self):
-        out =  "\tlr: " + str(self.lr).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
-        out += "\tur: " + str(self.ur).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
-        out += "\tlo: " + str(self.lo).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
-        out += "\tuo: " + str(self.uo).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
 
-        # out = f"lr: shape [{self.lr.shape}], min: {self.lr.min()}, max: {self.lr.max()}\n"
-        # out += f"ur: shape [{self.ur.shape}], min: {self.ur.min()}, max: {self.ur.max()}\n"
-        # out += f"lo: shape [{self.lo.shape}], min: {self.lo.min()}, max: {self.lo.max()}\n"
-        # out += f"uo: shape [{self.uo.shape}], min: {self.uo.min()}, max: {self.uo.max()}\n"
+    def __str__(self):
+        # out =  "\tlr: " + str(self.lr).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
+        # out += "\tur: " + str(self.ur).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
+        # out += "\tlo: " + str(self.lo).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
+        # out += "\tuo: " + str(self.uo).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
+
+        out = f"lr: shape [{self.lr.shape}], min: {self.lr.min()}, max: {self.lr.max()}\n"
+        out += f"ur: shape [{self.ur.shape}], min: {self.ur.min()}, max: {self.ur.max()}\n"
+        out += f"lo: shape [{self.lo.shape}], min: {self.lo.min()}, max: {self.lo.max()}\n"
+        out += f"uo: shape [{self.uo.shape}], min: {self.uo.min()}, max: {self.uo.max()}\n"
         return out
 
 class DpBounds:
