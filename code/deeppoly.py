@@ -5,7 +5,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DpConstraints:
-
     def __init__(self, lr: torch.Tensor, ur: torch.Tensor, lo: torch.Tensor, uo: torch.Tensor):
         self.lr = lr
         self.ur = ur
@@ -18,10 +17,10 @@ class DpConstraints:
         pass
     
     def __str__(self):
-        out = "\t" + str(self.lr).replace("\n", "\n\t") + "\n"
-        out += "\t" + str(self.ur).replace("\n", "\n\t") + "\n"
-        out += "\t" + str(self.lo).replace("\n", "\n\t") + "\n"
-        out += "\t" + str(self.uo).replace("\n", "\n\t") + "\n"
+        out =  "\tlr: " + str(self.lr).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
+        out += "\tur: " + str(self.ur).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
+        out += "\tlo: " + str(self.lo).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
+        out += "\tuo: " + str(self.uo).replace("\n", "\n   ").replace("tensor(", "").replace(")", "") + "\n"
         return out
 
 class DpBounds:
@@ -31,8 +30,10 @@ class DpBounds:
         assert self.lb.shape == self.ub.shape
         assert (self.lb > self.ub).sum() == 0
 
-class DpInput():
+    def __repr__(self):
+        return f"lb: {self.lb}\tub: {self.ub}"
 
+class DpInput():
     def __init__(self, bounds: DpBounds):
         self.layer = None
         self.bounds = bounds
