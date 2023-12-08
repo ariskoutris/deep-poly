@@ -48,17 +48,20 @@ class DpFlatten():
 
 
 class DpRelu():
-    def __init__(self, layer : nn.ReLU):
+    def __init__(self, layer : nn.ReLU, is_leaky = True):
         self.layer = layer
+        self.relu_neg_slope = 0.0 if not is_leaky else layer.negative_slope
         self.bounds = None
-        self.slope = None
+        self.pos_slope = None
+        self.neg_slope = None
         self.bias_upper = None
+        self.bias_lower = None
         self.constraints = None
 
     def compute_constraints(self, bounds: DpBounds):
-        self.slope = bounds.ub / (bounds.ub - bounds.lb)
-        self.bias_upper = - bounds.lb * self.slope
-
+        bound_diff = bounds.ub - bounds.lb
+        slope_common = (bounds.ub - self.relu_neg_slope * bounds.lb)/bound_diff
+        bias_common = - (1 - self.relu_neg_slope) * bounds.ub * bounds.lb / bound_diff
         #  0 >= ub >= lb
         mask_upper = bounds.ub <= 0
         # ub >= lb >= 0
@@ -67,19 +70,32 @@ class DpRelu():
         mask_crossing =  ~(mask_lower | mask_upper)
         assert (mask_crossing & mask_upper & mask_lower == False).all()
 
+        if self.relu_neg_slope <= 1.0:
+            self.pos_slope = slope_common
+            self.bias_upper = bias_common
+
+            self.neg_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope)
+            self.bias_lower = torch.zeros_like(self.bias_upper)
+        else:
+            self.neg_slope = slope_common
+            self.bias_lower = bias_common
+
+            self.pos_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope)
+            self.bias_upper = torch.zeros_like(self.bias_lower)
+
         ur = torch.zeros_like(bounds.ub)
-        ur[mask_crossing] = self.slope[mask_crossing]
+        ur[mask_crossing] = self.pos_slope[mask_crossing]
         ur[mask_lower] = 1
-        ur[mask_upper] = 0
 
         uo = torch.zeros_like(bounds.lb)
         uo[mask_crossing] = self.bias_upper[mask_crossing]
 
-        # For now use the x >= 0 constraint for lower relu
         lr = torch.zeros_like(bounds.lb)
-        lr[mask_crossing] = torch.where(-bounds.lb < bounds.ub, 1.0, 0.0)[mask_crossing]
+        lr[mask_crossing] = self.neg_slope[mask_crossing]
         lr[mask_lower] = 1
+
         lo = torch.zeros_like(bounds.lb)
+        lo[mask_crossing] = self.bias_lower[mask_crossing]
 
         self.constraints = DpConstraints(torch.diag(lr.flatten()), torch.diag(ur.flatten()), lo, uo)
 
@@ -158,6 +174,8 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1):
         elif isinstance(layer, nn.Linear):
             dp_layer = DpLinear(layer)
         elif isinstance(layer, nn.ReLU):
+            dp_layer = DpRelu(layer, False)
+        elif isinstance(layer, nn.LeakyReLU):
             dp_layer = DpRelu(layer)
 
         dp_layer.compute_bound(dp_layers[-1].bounds)
