@@ -99,3 +99,8 @@ def bounds_mul_constraints(constraints : DpConstraints, bounds : DpBounds) -> Dp
     ub = bounds.ub @ ur_pos + bounds.lb @ ur_neg + constraints.uo
 
     return DpBounds(lb, ub)
+
+def log_layer_bounds(logger, layer, message):
+    logger.debug(message)
+    logger.debug(f'lb: shape [{layer.bounds.lb.shape}], min: {layer.bounds.lb.min()}, max: {layer.bounds.lb.max()}')
+    logger.debug(f'ub: shape [{layer.bounds.ub.shape}], min: {layer.bounds.ub.min()}, max: {layer.bounds.ub.max()}\n')

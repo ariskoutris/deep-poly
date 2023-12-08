@@ -45,6 +45,7 @@ def main():
         help="Neural network architecture which is supposed to be verified.",
     )
     parser.add_argument("--spec", type=str, required=True, help="Test case to verify.")
+    parser.add_argument("--labels", type=str, required=True, help="Path to file containing the labels of the dataset.")
     args = parser.parse_args()
 
     true_label, dataset, image, eps = parse_spec(args.spec)
@@ -54,14 +55,14 @@ def main():
     net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)
     logging.info(net)
 
+    labels_file = args.labels
     image_name = args.spec.split('/')[-1]
-    with open('test_cases/gt.txt', 'r') as file:
+    with open(labels_file, 'r') as file:
         for line in file:
             row = line.strip().split(',')
             if row[0] == args.net and row[1] == image_name:
                 verified_status = (row[2] == 'verified')
                 break
-
 
     image = image.to(DEVICE)
     out = net(image.unsqueeze(0))
