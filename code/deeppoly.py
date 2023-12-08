@@ -86,6 +86,7 @@ class DpRelu():
         ur = torch.zeros_like(bounds.ub)
         ur[mask_crossing] = self.pos_slope[mask_crossing]
         ur[mask_lower] = 1
+        ur[mask_upper] = self.relu_neg_slope
 
         uo = torch.zeros_like(bounds.lb)
         uo[mask_crossing] = self.bias_upper[mask_crossing]
@@ -93,6 +94,7 @@ class DpRelu():
         lr = torch.zeros_like(bounds.lb)
         lr[mask_crossing] = self.neg_slope[mask_crossing]
         lr[mask_lower] = 1
+        lr[mask_upper] = self.relu_neg_slope
 
         lo = torch.zeros_like(bounds.lb)
         lo[mask_crossing] = self.bias_lower[mask_crossing]
