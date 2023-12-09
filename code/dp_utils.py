@@ -51,10 +51,10 @@ class DpBounds:
             return (self.lb.flatten()[target] - self.ub.flatten().max()).min().item()
 
 def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
-    lb = (x - eps).to(torch.float)
+    lb = (x - eps).to(torch.double)
     lb.clamp_(min=min_val, max=max_val)
 
-    ub = (x + eps).to(torch.float)
+    ub = (x + eps).to(torch.double)
     ub.clamp_(min=min_val, max=max_val)
 
     return DpBounds(lb, ub)
@@ -107,8 +107,8 @@ def bounds_mul_constraints(constraints : DpConstraints, bounds : DpBounds) -> Dp
     ur_pos = torch.relu(constraints.ur)
     ur_neg = -torch.relu(-constraints.ur)
 
-    lb = bounds.lb @ lr_pos + bounds.ub @ lr_neg + constraints.lo
-    ub = bounds.ub @ ur_pos + bounds.lb @ ur_neg + constraints.uo
+    lb = bounds.lb.flatten() @ lr_pos + bounds.ub.flatten() @ lr_neg + constraints.lo
+    ub = bounds.ub.flatten() @ ur_pos + bounds.lb.flatten() @ ur_neg + constraints.uo
 
     return DpBounds(lb, ub)
 
@@ -123,21 +123,54 @@ class AlphaParams:
         self.lb = lb
         self.ub = ub
 
-def init_alphas(model) -> list[torch.Tensor]:
-    params_dict = {}
+
+def init_alphas(model, inp_shape) -> list[torch.Tensor]:
+    """
+    Only linear layer can provide some guarantees of out_shape 
+    which is why we need to calculate the out_shapes of other layers
+    """
+    inp_shape = list(inp_shape)
+    alphas = {}
+    has_relus = False
+
     for i, layer in enumerate(model):
-        if isinstance(layer, nn.ReLU):
-            input_shape = (1, model[i-1].out_features)
+        if isinstance(layer, nn.Linear):
+            assert inp_shape[-1] == layer.in_features
+            out_shape = inp_shape.copy()
+            out_shape[-1] = layer.out_features
+        elif isinstance(layer, nn.Flatten):
+            #TODO find a better way to handle these
+            start_dim = layer.start_dim
+            # Here the end dim is inclusive (usually in python end_dim is not included)
+            end_dim = len(inp_shape) if layer.end_dim == -1 else layer.end_dim + 1
+
+            out_shape = inp_shape[:start_dim]
+            out_shape = out_shape + torch.prod(torch.tensor(inp_shape[start_dim:end_dim])).view(1).tolist()
+            out_shape = out_shape + inp_shape[end_dim:]
+        elif isinstance(layer, nn.ReLU):
+            has_relus = True
+            out_shape = inp_shape.copy()
             lb, ub = 0.0, 1.0
-            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(input_shape)))
-            params_dict[i] = AlphaParams(value=initial_alphas, lb=lb, ub=ub)
+            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(inp_shape, dtype=torch.double)))
+            alphas[i] = AlphaParams(value=initial_alphas, lb=lb, ub=ub)
         elif isinstance(layer, nn.LeakyReLU):
-            input_shape = (1, model[i-1].out_features)
+            has_relus = True
+            out_shape = inp_shape.copy()
             lb = min(1.0, layer.negative_slope)
             ub = max(1.0, layer.negative_slope)
-            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(input_shape)))
-            params_dict[i] = AlphaParams(value=initial_alphas, lb=lb, ub=ub)
-    return params_dict  
+            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(inp_shape, dtype=torch.double)))
+            alphas[i] = AlphaParams(value=initial_alphas, lb=lb, ub=ub)
+        elif isinstance(layer, nn.Conv2d):
+            C, H, W = inp_shape[-3:]
+            assert C == layer.in_channels
+            Hout = (H + 2 * layer.padding[0] - layer.dilation[0] * (layer.kernel_size[0] - 1) - 1) // layer.stride[0] + 1
+            Wout = (W + 2 * layer.padding[1] - layer.dilation[1] * (layer.kernel_size[1] - 1) - 1) // layer.stride[1] + 1
+            out_shape = torch.tensor([*inp_shape[:-3], layer.out_channels, Hout, Wout]).tolist()
+        else:
+            raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
+        inp_shape = out_shape
+
+    return alphas if has_relus else None
 
 
 if __name__ == "__main__":
