@@ -45,7 +45,7 @@ def main():
         help="Neural network architecture which is supposed to be verified.",
     )
     parser.add_argument("--spec", type=str, required=True, help="Test case to verify.")
-    parser.add_argument("--labels", type=str, required=True, help="Path to file containing the labels of the dataset.")
+    parser.add_argument("--labels", type=str, required=False, help="Path to file containing the labels of the dataset.")
     args = parser.parse_args()
 
     true_label, dataset, image, eps = parse_spec(args.spec)
@@ -55,14 +55,16 @@ def main():
     net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)
     logging.info(net)
 
-    labels_file = args.labels
-    image_name = args.spec.split('/')[-1]
-    with open(labels_file, 'r') as file:
-        for line in file:
-            row = line.strip().split(',')
-            if row[0] == args.net and row[1] == image_name:
-                verified_status = (row[2] == 'verified')
-                break
+    verified_status = None
+    if args.labels:
+        labels_file = args.labels
+        image_name = args.spec.split('/')[-1]
+        with open(labels_file, 'r') as file:
+            for line in file:
+                row = line.strip().split(',')
+                if row[0] == args.net and row[1] == image_name:
+                    verified_status = (row[2] == 'verified')
+                    break
 
     image = image.to(DEVICE)
     out = net(image.unsqueeze(0))
@@ -70,12 +72,12 @@ def main():
     assert pred_label == true_label
 
     if analyze(net, image, eps, true_label):
-        status_msg = "Verified\t"
-        status_msg += '✅' if verified_status else '🛑 (❗️)'
+        status_msg = "verified"
+        if verified_status != None: status_msg += '\t✅' if verified_status else '\t🛑 (❗️)'
         print(status_msg)
     else:
-        status_msg = "Not Verified\t"
-        status_msg += u'🛑' if verified_status else '✅'
+        status_msg = "not verified"
+        if verified_status != None: status_msg += u'\t🛑' if verified_status else '\t✅'
         print(status_msg)
 
 
