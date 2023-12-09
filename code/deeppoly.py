@@ -54,6 +54,7 @@ class DpRelu():
         self.bias_upper = None
         self.bias_lower = None
         self.constraints = None
+        self.alphas = None
 
     def compute_constraints(self, bounds: DpBounds):
         bound_diff = bounds.ub - bounds.lb
@@ -71,13 +72,19 @@ class DpRelu():
             self.pos_slope = slope_common
             self.bias_upper = bias_common
 
-            self.neg_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope)
+            if self.alphas == None:
+                self.neg_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope)
+            else:
+                self.neg_slope = self.alphas
             self.bias_lower = torch.zeros_like(self.bias_upper)
         else:
             self.neg_slope = slope_common
             self.bias_lower = bias_common
 
-            self.pos_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope)
+            if self.alphas == None:
+                self.pos_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope)
+            else:
+                self.pos_slope = self.alphas
             self.bias_upper = torch.zeros_like(self.bias_lower)
 
         ur = torch.zeros_like(bounds.ub)
@@ -104,6 +111,9 @@ class DpRelu():
 
     def backsub(self, accum_c: DpConstraints):
         return constraints_mul(self.constraints, accum_c)
+    
+    def set_alphas(self, alphas: torch.Tensor):
+        self.alphas = alphas
 
 
 class DpConv():
@@ -156,14 +166,16 @@ def deeppoly_backsub(dp_layers):
     logger.debug('[BACKSUBSTITUTION END]')
     return DpBounds(lb, ub)
 
-def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1):
+def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=None):
     bounds = get_input_bounds(x, eps, min_val, max_val)
     input_layer = DpInput(bounds)
-    dp_layers = [input_layer]
+    dp_layers = [input_layer] if layers == None else layers
     log_layer_bounds(logger, input_layer, 'Input Layer')
     for i, layer in enumerate(model):
         dp_layer = None
-        if isinstance(layer, nn.Flatten):
+        if layers != None:
+            dp_layer = dp_layers[i + 1] # i + 1 as the first element is DpInput
+        elif isinstance(layer, nn.Flatten):
             dp_layer = DpFlatten(layer)
         elif isinstance(layer, nn.Linear):
             dp_layer = DpLinear(layer)
@@ -172,21 +184,33 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1):
         elif isinstance(layer, nn.LeakyReLU):
             dp_layer = DpRelu(layer)
 
-        dp_layer.compute_bound(dp_layers[-1].bounds)
-        dp_layers.append(dp_layer)
+        dp_layer.compute_bound(dp_layers[i].bounds)
+        if layers == None:
+            dp_layers.append(dp_layer)
         if not isinstance(layer, nn.Flatten):
-            dp_layer.bounds = deeppoly_backsub(dp_layers)
+            dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2]) # i + 2 as the first element is DpInput
 
         log_layer_bounds(logger, dp_layer, f'Layer {i + 1} [{layer}]')
 
     if le_layer is not None:
-        dp_layers.append(le_layer)
-        le_layer.bounds = deeppoly_backsub(dp_layers)
+        if layers is None:
+            dp_layers.append(le_layer)
+            le_layer.bounds = deeppoly_backsub(dp_layers)
+        else:
+            dp_layers[-1] = le_layer
+            le_layer.bounds = deeppoly_backsub(dp_layers)
         log_layer_bounds(logger, le_layer, f'Layer {len(dp_layers) - 1} [{le_layer}]:')
 
     return dp_layers
 
-def certify_sample(model, x, y, eps, use_le=True) -> bool:
+def assign_alphas_to_relus(dp_layers, alphas):
+    for i, layer in enumerate(dp_layers):
+        if isinstance(layer, DpRelu):
+            layer.set_alphas(alphas[i - 1]) # i - 1 as the first element of dp_layers is DpInput
+    
+    return dp_layers
+
+def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
 
     if x.dim() == 3:
         x = x.unsqueeze(0)
@@ -200,7 +224,46 @@ def certify_sample(model, x, y, eps, use_le=True) -> bool:
 
     bounds = dp_layers[-1].bounds
 
-    if use_le:
-        return check_postcondition_le(bounds)
-    else:
-        check_postcondition(y, bounds)
+    if use_le and check_postcondition_le(bounds):
+        return True
+    if not use_le and check_postcondition(y, bounds):
+        return True
+    elif not use_slope_opt:
+        return False
+    
+    alphas, ranges = init_alphas(model, x.shape)
+    if alphas == None and ranges == None:
+        return False
+    dp_layers = assign_alphas_to_relus(dp_layers, alphas)
+
+    loss = nn.CrossEntropyLoss()
+    # TODO: Find optimal parameters as prelims fc_2 last example (img8_mnist_0.0750.txt) was failing sometimes (check others that use alphas as well)
+    optimizer = torch.optim.Adam(alphas, lr=5)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.75, verbose=False) # turn this to true to make it print the lr each time it changes it
+
+    for i in range(20):
+        if use_le:
+            n_classes = model[-1].out_features
+            le_layer = DiffLayer(y, n_classes)
+            dp_layers = propagate_sample(model, x, eps, le_layer=le_layer, layers=dp_layers)
+        else:
+            dp_layers = propagate_sample(model, x, eps, layers=dp_layers)
+        bounds = dp_layers[-1].bounds
+        if use_le and check_postcondition_le(bounds):
+            return True
+        elif not use_le and check_postcondition(y, bounds):
+            return True
+        else:
+            if use_le:
+                output = torch.sum(- bounds.lb[bounds.lb < 0])
+            else:
+                output = loss(bounds.get_loss_tensor(y), torch.tensor(y).view(1))
+            optimizer.zero_grad()
+            output.backward()
+            optimizer.step()
+            if scheduler.get_last_lr()[-1] > 0.1:
+                scheduler.step()
+
+            for i in range(len(alphas)):
+                if len(ranges[i]) != 0:
+                    alphas[i].data.clamp_(ranges[i][0], ranges[i][1])
