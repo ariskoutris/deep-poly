@@ -40,6 +40,13 @@ class DpBounds:
         tensor = self.ub.clone().flatten()
         tensor[target] = self.lb.flatten()[target].clone()
         return tensor[None, :]
+    
+    def get_certification_distance(self, y=None):
+        if y is None:
+            return self.lb.flatten().min().item()
+        else:
+            target = torch.tensor(y).view(1)
+            return (self.lb.flatten()[target] - self.ub.flatten().max()).min().item()
 
 def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
     lb = (x - eps).to(torch.float)
@@ -77,21 +84,18 @@ def check_postcondition(y, bounds: DpBounds) -> bool:
     ub = bounds.ub.flatten()
 
     target_lb = lb[target].item()
-    min_interval = ub.max() - lb.min()
 
     out = True
     for i in range(ub.shape[0]):
         if i != target and ub[i] >= target_lb:
             out = False
-        if i != target:
-            min_interval = min(min_interval, target_lb - ub[i])
-    logger.info(f'Certification Distance: {min_interval}\n')
+    
+    logger.info(f'Certification Distance: {bounds.get_certification_distance(y)}\n')
     return out
 
 def check_postcondition_le(bounds: DpBounds) -> bool:
     lb = bounds.lb.flatten()
-    ub = bounds.ub.flatten()
-    logger.info(f'Certification Distance: {lb.min()}\n')
+    logger.info(f'Certification Distance: {bounds.get_certification_distance()}\n')
     return lb.min() >= 0
 
 # Multiply bounds with constraints, use during forward pass
@@ -110,76 +114,28 @@ def log_layer_bounds(logger, layer, message):
     logger.debug(message)
     logger.debug(f'lb: shape [{layer.bounds.lb.shape}], min: {layer.bounds.lb.min()}, max: {layer.bounds.lb.max()}')
     logger.debug(f'ub: shape [{layer.bounds.ub.shape}], min: {layer.bounds.ub.min()}, max: {layer.bounds.ub.max()}\n')
+    
+class AlphaParams:
+    def __init__(self, value: torch.Tensor, lb, ub):
+        self.value = value
+        self.lb = lb
+        self.ub = ub
 
-def init_alphas(model, inp_shape) -> list[torch.Tensor]:
-    inp_shape = list(inp_shape)
-    
-    while len(inp_shape) < 4:
-        inp_shape = [1] + inp_shape
-    
-    alphas = []
-    ranges = []
-
-    has_relus = False
-    
+def init_alphas(model) -> list[torch.Tensor]:
+    params_dict = {}
     for i, layer in enumerate(model):
-        if isinstance(layer, nn.Linear):
-            assert inp_shape[-1] == layer.in_features
-            out_shape = inp_shape.copy()
-            out_shape[-1] = layer.out_features
-
-            alphas.append(nn.Parameter(torch.empty((0,))))
-            ranges.append([])
-        elif isinstance(layer, nn.Flatten):
-            #TODO find a better way to handle these
-            start_dim = layer.start_dim
-            # Here the end dim is inclusive (usually in python end_dim is not included)
-            end_dim = len(inp_shape) if layer.end_dim == -1 else layer.end_dim + 1
-
-            out_shape = inp_shape[:start_dim]
-            out_shape = out_shape + torch.prod(torch.tensor(inp_shape[start_dim:end_dim])).view(1).tolist()
-            out_shape = out_shape + inp_shape[end_dim:]
-
-            alphas.append(nn.Parameter(torch.empty((0,))))
-            ranges.append([])
-        elif isinstance(layer, nn.ReLU):
-            has_relus = True
-            out_shape = inp_shape.copy()
-            alp = torch.rand(torch.Size(inp_shape), requires_grad=True)
-            alphas.append(nn.Parameter(alp))
-            ranges.append([0.0, 1.0])
+        if isinstance(layer, nn.ReLU):
+            input_shape = (1, model[i-1].out_features)
+            lb, ub = 0.0, 1.0
+            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(input_shape)))
+            params_dict[i] = AlphaParams(value=initial_alphas, lb=lb, ub=ub)
         elif isinstance(layer, nn.LeakyReLU):
-            has_relus = True
-            out_shape = inp_shape.copy()
-            if layer.negative_slope <= 1.0:
-                low_bound = layer.negative_slope
-                high_bound = 1.0
-            else:
-                low_bound = 1.0
-                high_bound = layer.negative_slope
-            alp = low_bound + (high_bound - low_bound) * torch.rand(torch.Size(inp_shape), requires_grad=True)
-            alphas.append(nn.Parameter(alp))
-            ranges.append([low_bound, high_bound])
-        elif isinstance(layer, nn.Conv2d):
-            C, H, W = inp_shape[-3:]
-            assert C == layer.in_channels
-            Hout = (H + 2 * layer.padding[0] - layer.dilation[0] * (layer.kernel_size[0] - 1) - 1) // layer.stride[0] + 1
-            Wout = (W + 2 * layer.padding[1] - layer.dilation[1] * (layer.kernel_size[1] - 1) - 1) // layer.stride[1] + 1
-            out_shape = torch.tensor([*inp_shape[:-3], layer.out_channels, Hout, Wout]).tolist()
-
-            alphas.append(nn.Parameter(torch.empty((0,))))
-            ranges.append([])
-        else:
-            raise NotImplementedError(f'Unsupported layer type: {type(layer)}')
-        # print(f"A: inp {i} = {inp_shape} \tout {i} = {out_shape}")
-        inp_shape = out_shape
-
-    assert len(ranges) == len(alphas)
-
-    if has_relus:
-        return alphas, ranges
-    else:
-        return None, None
+            input_shape = (1, model[i-1].out_features)
+            lb = min(1.0, layer.negative_slope)
+            ub = max(1.0, layer.negative_slope)
+            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(input_shape)))
+            params_dict[i] = AlphaParams(value=initial_alphas, lb=lb, ub=ub)
+    return params_dict  
 
 
 if __name__ == "__main__":

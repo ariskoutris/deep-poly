@@ -205,9 +205,8 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
 
 def assign_alphas_to_relus(dp_layers, alphas):
     for i, layer in enumerate(dp_layers):
-        if isinstance(layer, DpRelu):
-            layer.set_alphas(alphas[i - 1]) # i - 1 as the first element of dp_layers is DpInput
-    
+        if (i-1) in alphas:
+            layer.set_alphas(alphas[i - 1].value) # i - 1 as the first element of dp_layers is DpInput
     return dp_layers
 
 def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
@@ -218,52 +217,57 @@ def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
     if use_le:
         n_classes = model[-1].out_features
         le_layer = DiffLayer(y, n_classes)
-        dp_layers = propagate_sample(model, x, eps, le_layer)
+        dp_layers = propagate_sample(model, x, eps, le_layer=le_layer)
     else:
         dp_layers = propagate_sample(model, x, eps)
 
     bounds = dp_layers[-1].bounds
 
-    if use_le and check_postcondition_le(bounds):
+    verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+    if verified:
+        logger.warning(f'Certification Distance: {bounds.get_certification_distance()}\n')
         return True
-    if not use_le and check_postcondition(y, bounds):
-        return True
-    elif not use_slope_opt:
-        return False
+    else:
+        verified = certify_with_alphas(model, dp_layers, x, y, eps, use_le) if use_slope_opt else False
+
+    return verified
     
-    alphas, ranges = init_alphas(model, x.shape)
-    if alphas == None and ranges == None:
+def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
+    
+    alphas_dict = init_alphas(model)
+    if alphas_dict is None:
         return False
-    dp_layers = assign_alphas_to_relus(dp_layers, alphas)
+    dp_layers = assign_alphas_to_relus(dp_layers, alphas_dict)
 
-    loss = nn.CrossEntropyLoss()
-    # TODO: Find optimal parameters as prelims fc_2 last example (img8_mnist_0.0750.txt) was failing sometimes (check others that use alphas as well)
-    optimizer = torch.optim.Adam(alphas, lr=5)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.75, verbose=False) # turn this to true to make it print the lr each time it changes it
-
-    for i in range(20):
+    loss_func = nn.CrossEntropyLoss() 
+    optimizer = torch.optim.Adam([alphas_dict[key].value for key in alphas_dict], lr=5)
+    
+    for _ in range(30):
+        
         if use_le:
             n_classes = model[-1].out_features
             le_layer = DiffLayer(y, n_classes)
             dp_layers = propagate_sample(model, x, eps, le_layer=le_layer, layers=dp_layers)
         else:
             dp_layers = propagate_sample(model, x, eps, layers=dp_layers)
+            
         bounds = dp_layers[-1].bounds
-        if use_le and check_postcondition_le(bounds):
-            return True
-        elif not use_le and check_postcondition(y, bounds):
-            return True
+        
+        if use_le:
+            loss = torch.sum(-bounds.lb[bounds.lb < 0])
         else:
-            if use_le:
-                output = torch.sum(- bounds.lb[bounds.lb < 0])
-            else:
-                output = loss(bounds.get_loss_tensor(y), torch.tensor(y).view(1))
-            optimizer.zero_grad()
-            output.backward()
-            optimizer.step()
-            if scheduler.get_last_lr()[-1] > 0.1:
-                scheduler.step()
+            loss = loss_func(bounds.get_loss_tensor(y), torch.tensor(y).view(1))
+        
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        for alpha_param in alphas_dict.values():
+            alpha_param.value.data.clamp_(alpha_param.lb, alpha_param.ub)
 
-            for i in range(len(alphas)):
-                if len(ranges[i]) != 0:
-                    alphas[i].data.clamp_(ranges[i][0], ranges[i][1])
+        verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+        if verified:
+            logger.warning(f'Certification Distance: {bounds.get_certification_distance()}\n')
+            return True
+        
+    return False
