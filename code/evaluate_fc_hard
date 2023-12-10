@@ -1,0 +1,11 @@
+#!/bin/bash
+
+for i  in "fc_7 test_cases/fc_7/img4_mnist_0.0928.txt" "fc_2 test_cases_prelim/fc_2/img8_mnist_0.0750.txt" "fc_5 test_cases_prelim/fc_5/img8_mnist_0.1020.txt" "fc_6 test_cases_prelim/fc_6/img8_mnist_0.0316.txt"
+do
+	set -- $i
+	echo Evaluating network ${1}...
+	for spec in `ls test_cases/${1}`
+	do
+		python code/verifier.py --net ${1} --spec ${2}
+	done
+done
