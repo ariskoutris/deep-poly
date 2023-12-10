@@ -13,9 +13,6 @@ class DpConstraints:
         assert self.lo.shape == self.uo.shape
 
     def __repr__(self):
-        pass
-
-    def __str__(self):
         out = f"lr: shape [{self.lr.shape}], min: {self.lr.min()}, max: {self.lr.max()}\n"
         out += f"ur: shape [{self.ur.shape}], min: {self.ur.min()}, max: {self.ur.max()}\n"
         out += f"lo: shape [{self.lo.shape}], min: {self.lo.min()}, max: {self.lo.max()}\n"
