@@ -35,6 +35,11 @@ class DpBounds:
     def __repr__(self):
         return f"lb: {self.lb}\tub: {self.ub}"
     
+    @property
+    def shape(self):
+        assert self.lb.shape == self.ub.shape
+        return self.lb.shape
+    
     def get_loss_tensor(self, y):
         target = torch.tensor(y).view(1)
         tensor = self.ub.clone().flatten()
