@@ -3,6 +3,7 @@ import torch.nn as nn
 from dp_utils import *
 
 from line_profiler import profile
+from time import perf_counter
 import logging
 logger = logging.getLogger(__name__)
 
@@ -144,20 +145,12 @@ class DpConv():
     def compute_weight_matrix(self, inp_shape):
         
         @profile
-        def get_weight(inp_shape, conv_row, conv_col, kernel, vectorized=True):
+        def get_weight(inp_shape, conv_row, conv_col, kernel):
             temp = torch.zeros(inp_shape)
-            if vectorized:
-                end_row = conv_row + kernel.shape[1]
-                end_col = conv_col + kernel.shape[2]
-                temp[:, conv_row:end_row, conv_col:end_col] = kernel
-            else:
-                for c in range(kernel.shape[0]):
-                    for i in range(kernel.shape[1]):
-                        for j in range(kernel.shape[2]):
-                            temp[c][conv_row + i][conv_col + j] = kernel[c][i][j]
-
+            end_row = conv_row + kernel.shape[1]
+            end_col = conv_col + kernel.shape[2]
+            temp[:, conv_row:end_row, conv_col:end_col] = kernel
             return temp
-
         
         @profile
         def get_weight_matrix(conv, inp_shape):
@@ -283,6 +276,7 @@ def deeppoly_backsub(dp_layers):
 
 @profile
 def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=None):
+    time_start = perf_counter()
     bounds = get_input_bounds(x, eps, min_val, max_val)
     input_layer = DpInput(bounds)
     dp_layers = [input_layer] if layers == None else layers
@@ -308,14 +302,17 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
             dp_layer = DpConv(layer)
             dp_layer.compute_bound(dp_layers[i].bounds)
 
-        #dp_layer.compute_bound(dp_layers[i].bounds)
+        # Uncomment this line after optimization of DpConv.compute_bound is complete
+        # dp_layer.compute_bound(dp_layers[i].bounds)
+        
         if layers == None:
             dp_layers.append(dp_layer)
-            
-        #TODO: Call backsub only before RELUs
+        
+        # Backsubstitution is called on the layer before the ReLU
         if not isinstance(layer, nn.Flatten):
-            dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2]) # i + 2 as the first element is DpInput
-
+            if i + 2 <= len(model) and (isinstance(model[i + 1], nn.ReLU) or isinstance(model[i + 1], nn.LeakyReLU)):
+                dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2]) # i + 2 as the first element is DpInput
+                
         log_layer_bounds(logger, dp_layer, f'Layer {i + 1} [{layer}]')
 
     if le_layer is not None:
@@ -327,6 +324,7 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
             le_layer.bounds = deeppoly_backsub(dp_layers)
         log_layer_bounds(logger, le_layer, f'Layer {len(dp_layers) - 1} [{le_layer}]:')
 
+    logger.warning(f'Propagation Time: {perf_counter() - time_start:.4f}')
     return dp_layers
 
 def assign_alphas_to_relus(dp_layers, alphas):

@@ -8,7 +8,7 @@ import deeppoly, box
 import logging
 
 # Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
 
 DEVICE = "cpu"
 LOG = True
@@ -16,7 +16,7 @@ LOG = True
 def analyze(
     net: torch.nn.Module, inputs: torch.Tensor, eps: float, true_label: int
 ) -> bool:
-    return deeppoly.certify_sample(net, inputs, true_label, eps, use_slope_opt=False)
+    return deeppoly.certify_sample(net, inputs, true_label, eps, use_slope_opt=True)
 
 
 def main():
