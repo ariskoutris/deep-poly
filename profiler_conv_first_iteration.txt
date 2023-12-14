@@ -1,0 +1,353 @@
+not verified
+Wrote profile results to verifier.py.lprof
+Timer unit: 1e-06 s
+
+Total time: 0.148193 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: compute_weight_matrix at line 145
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   145                                               @profile
+   146                                               def compute_weight_matrix(self, inp_shape):
+   147                                                   
+   148         2          1.0      0.5      0.0          @profile
+   149         2         58.0     29.0      0.0          def get_weight(inp_shape, conv_row, conv_col, kernel):
+   150                                                       temp = torch.zeros(inp_shape)
+   151                                                       end_row = conv_row + kernel.shape[1]
+   152                                                       end_col = conv_col + kernel.shape[2]
+   153                                                       temp[:, conv_row:end_row, conv_col:end_col] = kernel
+   154                                                       return temp
+   155                                                   
+   156         2          0.0      0.0      0.0          @profile
+   157         2         58.0     29.0      0.0          def get_weight_matrix(conv, inp_shape):
+   158                                                       #TODO: Improve efficiency. Remove loops
+   159                                                       kernel = conv.weight.data.detach()
+   160                                                       C_out, C_in, K_h, K_w = kernel.shape
+   161                                                       N_in, C_in, H_i, W_i = inp_shape
+   162                                                       H_o = ((inp_shape[-2] + conv.padding[-2] + conv.padding[-2] - conv.kernel_size[-2]) // conv.stride[-2] + 1)
+   163                                                       W_o = ((inp_shape[-1] + conv.padding[-1] + conv.padding[-1] - conv.kernel_size[-1]) // conv.stride[-1] + 1)
+   164                                                       out_shape = N_in, C_out, H_o, W_o
+   165                                           
+   166                                                       H_grd, W_grd = H_o, H_i
+   167                                                       H_blk, W_blk = W_o, W_i
+   168                                           
+   169                                                       W_conv = torch.zeros((C_out, H_grd, H_blk, C_in, W_grd, W_blk), dtype=torch.double)
+   170                                           
+   171                                                       for c in range(C_out):
+   172                                                           for i in range(H_o):
+   173                                                               for j in range(W_o):
+   174                                                                   padded_H_i, padded_W_i = H_i + 2 * conv.padding[0], W_i + 2 * conv.padding[1]
+   175                                                                   conv_row, conv_col = i * conv.stride[0], j * conv.stride[1]
+   176                                                                   if conv_row >= padded_H_i | conv_col >= padded_W_i:
+   177                                                                       continue
+   178                                                                   temp_weight = get_weight((C_in, padded_H_i, padded_W_i), conv_row, conv_col, kernel[c])
+   179                                                                   W_conv[c, i, j] = temp_weight[:, conv.padding[0] : H_i+conv.padding[0], conv.padding[1] : W_i + conv.padding[1]]
+   180                                           
+   181                                                       B_conv = conv.bias.data.detach()
+   182                                                       B_conv = torch.ones(H_o*W_o, C_out) * B_conv
+   183                                                       B_conv = B_conv.t()
+   184                                           
+   185                                                       return W_conv, B_conv, out_shape
+   186                                                   
+   187                                                   # conv = nn.Conv2d(1, 16, kernel_size=(3,3), padding=(2, 2), stride=(2, 2))
+   188                                                   # conv.double()
+   189                                                   # # conv.bias.data = torch.zeros_like(conv.bias)
+   190                                                   # inp_shape = (1, 1, 28, 28)
+   191                                           
+   192         2     148007.0  74003.5     99.9          W, B, out_shape = get_weight_matrix(self.layer, inp_shape)
+   193                                           
+   194         2         23.0     11.5      0.0          W = torch.flatten(W, start_dim=0, end_dim=2)
+   195         2          4.0      2.0      0.0          W = torch.flatten(W, start_dim=1, end_dim=3)
+   196                                           
+   197         2         40.0     20.0      0.0          B = B.flatten()
+   198         2          2.0      1.0      0.0          W.shape[1] == B.shape[0]
+   199                                           
+   200                                                   # def test_weight(T, B, conv, inp_shape):
+   201                                                   #     i = torch.randn(*inp_shape, dtype = torch.double)
+   202                                                   #     out = i.flatten() @ T.t() + B
+   203                                                   #     print(torch.allclose(conv(i).flatten(), out.flatten(), atol=1e-06))
+   204                                           
+   205                                                   # for i in range(100):
+   206                                                   #     test_weight(W, B, conv, inp_shape)
+   207         2          0.0      0.0      0.0          return W, B, out_shape
+
+Total time: 0.022196 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: get_weight at line 148
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   148                                                   @profile
+   149                                                   def get_weight(inp_shape, conv_row, conv_col, kernel):
+   150      4096       5617.0      1.4     25.3              temp = torch.zeros(inp_shape)
+   151      4096       1095.0      0.3      4.9              end_row = conv_row + kernel.shape[1]
+   152      4096        826.0      0.2      3.7              end_col = conv_col + kernel.shape[2]
+   153      4096      14091.0      3.4     63.5              temp[:, conv_row:end_row, conv_col:end_col] = kernel
+   154      4096        567.0      0.1      2.6              return temp
+
+Total time: 0.070113 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: get_weight_matrix at line 156
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   156                                                   @profile
+   157                                                   def get_weight_matrix(conv, inp_shape):
+   158                                                       #TODO: Improve efficiency. Remove loops
+   159         1         10.0     10.0      0.0              kernel = conv.weight.data.detach()
+   160         1          0.0      0.0      0.0              C_out, C_in, K_h, K_w = kernel.shape
+   161         1          0.0      0.0      0.0              N_in, C_in, H_i, W_i = inp_shape
+   162         1          2.0      2.0      0.0              H_o = ((inp_shape[-2] + conv.padding[-2] + conv.padding[-2] - conv.kernel_size[-2]) // conv.stride[-2] + 1)
+   163         1          0.0      0.0      0.0              W_o = ((inp_shape[-1] + conv.padding[-1] + conv.padding[-1] - conv.kernel_size[-1]) // conv.stride[-1] + 1)
+   164         1          1.0      1.0      0.0              out_shape = N_in, C_out, H_o, W_o
+   165                                           
+   166         1          0.0      0.0      0.0              H_grd, W_grd = H_o, H_i
+   167         1          0.0      0.0      0.0              H_blk, W_blk = W_o, W_i
+   168                                           
+   169         1       3411.0   3411.0      4.9              W_conv = torch.zeros((C_out, H_grd, H_blk, C_in, W_grd, W_blk), dtype=torch.double)
+   170                                           
+   171        65          7.0      0.1      0.0              for c in range(C_out):
+   172       576         80.0      0.1      0.1                  for i in range(H_o):
+   173      4608        779.0      0.2      1.1                      for j in range(W_o):
+   174      4096       1158.0      0.3      1.7                          padded_H_i, padded_W_i = H_i + 2 * conv.padding[0], W_i + 2 * conv.padding[1]
+   175      4096        938.0      0.2      1.3                          conv_row, conv_col = i * conv.stride[0], j * conv.stride[1]
+   176      4096        715.0      0.2      1.0                          if conv_row >= padded_H_i | conv_col >= padded_W_i:
+   177                                                                       continue
+   178      4096      33358.0      8.1     47.6                          temp_weight = get_weight((C_in, padded_H_i, padded_W_i), conv_row, conv_col, kernel[c])
+   179      4096      29600.0      7.2     42.2                          W_conv[c, i, j] = temp_weight[:, conv.padding[0] : H_i+conv.padding[0], conv.padding[1] : W_i + conv.padding[1]]
+   180                                           
+   181         1         15.0     15.0      0.0              B_conv = conv.bias.data.detach()
+   182         1         33.0     33.0      0.0              B_conv = torch.ones(H_o*W_o, C_out) * B_conv
+   183         1          6.0      6.0      0.0              B_conv = B_conv.t()
+   184                                           
+   185         1          0.0      0.0      0.0              return W_conv, B_conv, out_shape
+
+Total time: 0.296933 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: compute_bound at line 209
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   209                                               @profile 
+   210                                               def compute_bound(self, bounds: DpBounds):
+   211         2          1.0      0.5      0.0          if self.inp_shape != None and self.inp_shape == bounds.shape:
+   212                                                       r = self.constraints.lr
+   213                                                       o = self.constraints.lo
+   214                                                   else:
+   215         2          3.0      1.5      0.0              self.inp_shape = bounds.shape
+   216         2     148202.0  74101.0     49.9              r, o, out_shape = self.compute_weight_matrix(bounds.shape)
+   217         2          7.0      3.5      0.0              self.constraints = DpConstraints(r, r, o, o)
+   218         2          2.0      1.0      0.0              self.out_shape = out_shape
+   219                                           
+   220         2     148677.0  74338.5     50.1          self.bounds = bounds_mul_constraints(DpConstraints(r.t(), r.t(), o, o), bounds)
+   221         2         37.0     18.5      0.0          self.bounds.lb = self.bounds.lb.view(self.out_shape)
+   222         2          4.0      2.0      0.0          self.bounds.ub = self.bounds.ub.view(self.out_shape)
+   223         2          0.0      0.0      0.0          return self.bounds
+
+Total time: 5.22732 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: deeppoly_backsub at line 253
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   253                                           @profile
+   254                                           def deeppoly_backsub(dp_layers):
+   255         6      19337.0   3222.8      0.4      constraints_acc = dp_layers[-1].constraints.copy()
+   256         6         35.0      5.8      0.0      constraints_acc.ur = constraints_acc.ur.t()
+   257         6          7.0      1.2      0.0      constraints_acc.lr = constraints_acc.lr.t()
+   258         6         19.0      3.2      0.0      logger.debug('[BACKSUBSTITUTION START]')
+   259         6     363571.0  60595.2      7.0      logger.debug(f'Current Layer [{dp_layers[-1].layer}]:\n{str(constraints_acc)}')
+   260        41         39.0      1.0      0.0      for i, layer in enumerate(reversed(dp_layers[1:-1])):
+   261        35    4538320.0 129666.3     86.8          constraints_acc = layer.backsub(constraints_acc)
+   262        35        555.0     15.9      0.0          logger.debug(f'Layer {len(dp_layers) - 2 - i} [{layer.layer}]:')
+   263        35      24545.0    701.3      0.5          logger.debug(str(constraints_acc))
+   264                                                   
+   265         6         43.0      7.2      0.0      ur = constraints_acc.ur.flatten(0, -2)
+   266         6          0.0      0.0      0.0      assert ur.dim() == 2
+   267         6          8.0      1.3      0.0      lr = constraints_acc.lr.flatten(0, -2)
+   268         6         20.0      3.3      0.0      lb_in = dp_layers[0].bounds.lb.flatten(1)
+   269         6          9.0      1.5      0.0      ub_in = dp_layers[0].bounds.ub.flatten(1)
+   270         6     120622.0  20103.7      2.3      b_curr = bounds_mul_constraints(DpConstraints(lr, ur, constraints_acc.lo, constraints_acc.uo), DpBounds(lb_in, ub_in))
+   271         6         60.0     10.0      0.0      lb = b_curr.lb.view(dp_layers[-1].bounds.shape)
+   272         6         12.0      2.0      0.0      ub = b_curr.ub.view(dp_layers[-1].bounds.shape)
+   273         6         21.0      3.5      0.0      logger.debug(f'Input Layer:')
+   274         6     159915.0  26652.5      3.1      logger.debug(str(constraints_acc))
+   275         6          8.0      1.3      0.0      logger.debug('[BACKSUBSTITUTION END]')
+   276         6        170.0     28.3      0.0      return DpBounds(lb, ub)
+
+Total time: 5.76343 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: propagate_sample at line 278
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   278                                           @profile
+   279                                           def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=None):
+   280         1         63.0     63.0      0.0      bounds = get_input_bounds(x, eps, min_val, max_val)
+   281         1          1.0      1.0      0.0      input_layer = DpInput(bounds)
+   282         1          1.0      1.0      0.0      dp_layers = [input_layer] if layers == None else layers
+   283         1         51.0     51.0      0.0      log_layer_bounds(logger, input_layer, 'Input Layer')
+   284        13          9.0      0.7      0.0      for i, layer in enumerate(model):
+   285        12          1.0      0.1      0.0          dp_layer = None
+   286        12          2.0      0.2      0.0          if layers != None:
+   287                                                       dp_layer = dp_layers[i + 1] # i + 1 as the first element is DpInput
+   288                                                       dp_layer.compute_bound(dp_layers[i].bounds)
+   289        12         11.0      0.9      0.0          elif isinstance(layer, nn.Flatten):
+   290         1          2.0      2.0      0.0              dp_layer = DpFlatten(layer)
+   291         1         44.0     44.0      0.0              dp_layer.compute_bound(dp_layers[i].bounds)
+   292        11          3.0      0.3      0.0          elif isinstance(layer, nn.Linear):
+   293         4         84.0     21.0      0.0              dp_layer = DpLinear(layer)
+   294         4       3676.0    919.0      0.1              dp_layer.compute_bound(dp_layers[i].bounds)
+   295         7          4.0      0.6      0.0          elif isinstance(layer, nn.ReLU):
+   296         5         16.0      3.2      0.0              dp_layer = DpRelu(layer, False)
+   297         5     227962.0  45592.4      4.0              dp_layer.compute_bound(dp_layers[i].bounds)
+   298         2          0.0      0.0      0.0          elif isinstance(layer, nn.LeakyReLU):
+   299                                                       dp_layer = DpRelu(layer)
+   300                                                       dp_layer.compute_bound(dp_layers[i].bounds)
+   301         2          0.0      0.0      0.0          elif isinstance(layer, nn.Conv2d):
+   302         2          4.0      2.0      0.0              dp_layer = DpConv(layer)
+   303         2     296963.0 148481.5      5.2              dp_layer.compute_bound(dp_layers[i].bounds)
+   304                                           
+   305                                                   # Uncomment this line after optimization of DpConv.compute_bound is complete
+   306                                                   # dp_layer.compute_bound(dp_layers[i].bounds)
+   307                                                   
+   308        12          5.0      0.4      0.0          if layers == None:
+   309        12          8.0      0.7      0.0              dp_layers.append(dp_layer)
+   310                                                   
+   311                                                   # Backsubstitution is called on the layer before the ReLU
+   312        12         16.0      1.3      0.0          if not isinstance(layer, nn.Flatten):
+   313        11        107.0      9.7      0.0              if i + 2 <= len(model) and (isinstance(model[i + 1], nn.ReLU) or isinstance(model[i + 1], nn.LeakyReLU)):
+   314         5    5060573.0    1e+06     87.8                  dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2]) # i + 2 as the first element is DpInput
+   315                                                           
+   316        12        421.0     35.1      0.0          log_layer_bounds(logger, dp_layer, f'Layer {i + 1} [{layer}]')
+   317                                           
+   318         1          0.0      0.0      0.0      if le_layer is not None:
+   319         1          0.0      0.0      0.0          if layers is None:
+   320         1          0.0      0.0      0.0              dp_layers.append(le_layer)
+   321         1     173384.0 173384.0      3.0              le_layer.bounds = deeppoly_backsub(dp_layers)
+   322                                                   else:
+   323                                                       dp_layers[-1] = le_layer
+   324                                                       le_layer.bounds = deeppoly_backsub(dp_layers)
+   325         1         16.0     16.0      0.0          log_layer_bounds(logger, le_layer, f'Layer {len(dp_layers) - 1} [{le_layer}]:')
+   326                                           
+   327         1          0.0      0.0      0.0      return dp_layers
+
+Total time: 5.76425 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: certify_sample at line 335
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   335                                           @profile
+   336                                           def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
+   337         1        544.0    544.0      0.0      model.double()
+   338         1          4.0      4.0      0.0      x.double()
+   339                                           
+   340         1          0.0      0.0      0.0      if x.dim() == 3:
+   341         1          3.0      3.0      0.0          x = x.unsqueeze(0)
+   342                                           
+   343         1          0.0      0.0      0.0      if use_le:
+   344         1          5.0      5.0      0.0          n_classes = model[-1].out_features
+   345         1        177.0    177.0      0.0          le_layer = DiffLayer(y, n_classes)
+   346         1    5763487.0    6e+06    100.0          dp_layers = propagate_sample(model, x, eps, le_layer=le_layer)
+   347                                               else:
+   348                                                   dp_layers = propagate_sample(model, x, eps)
+   349                                           
+   350         1          1.0      1.0      0.0      bounds = dp_layers[-1].bounds
+   351                                           
+   352         1         24.0     24.0      0.0      verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+   353         1          1.0      1.0      0.0      if verified:
+   354                                                   logger.warning(f'Certification Distance: {bounds.get_certification_distance()}')
+   355                                                   return True
+   356                                               else:
+   357         1          1.0      1.0      0.0          verified = certify_with_alphas(model, dp_layers, x, y, eps, use_le) if use_slope_opt else False
+   358                                           
+   359         1          0.0      0.0      0.0      return verified
+
+Total time: 0 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: certify_with_alphas at line 361
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   361                                           @profile
+   362                                           def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
+   363                                               
+   364                                               alphas_dict = init_alphas(model, x.shape)
+   365                                               if alphas_dict is None:
+   366                                                   return False
+   367                                               dp_layers = assign_alphas_to_relus(dp_layers, alphas_dict)
+   368                                           
+   369                                               loss_func = nn.CrossEntropyLoss() 
+   370                                               optimizer = torch.optim.Adam([alphas_dict[key].value for key in alphas_dict], lr=2)
+   371                                           
+   372                                               # Early Stopping Parameters
+   373                                               num_epochs = 30
+   374                                               min_epochs = 3
+   375                                               window_size = 5
+   376                                               cd_window = []
+   377                                               cd_max = -1000
+   378                                               patience = 3
+   379                                               pi_window = []
+   380                                               
+   381                                               for epoch in range(num_epochs):
+   382                                                   
+   383                                                   if use_le:
+   384                                                       n_classes = model[-1].out_features
+   385                                                       le_layer = DiffLayer(y, n_classes)
+   386                                                       dp_layers = propagate_sample(model, x, eps, le_layer=le_layer, layers=dp_layers)
+   387                                                   else:
+   388                                                       dp_layers = propagate_sample(model, x, eps, layers=dp_layers)
+   389                                                       
+   390                                                   bounds = dp_layers[-1].bounds
+   391                                                   
+   392                                                   if use_le:
+   393                                                       loss = torch.sum(-bounds.lb[bounds.lb < 0])
+   394                                                   else:
+   395                                                       loss = loss_func(bounds.get_loss_tensor(y), torch.tensor(y).view(1))
+   396                                                   
+   397                                                   optimizer.zero_grad()
+   398                                                   loss.backward()
+   399                                                   optimizer.step()
+   400                                                   
+   401                                                   for alpha_param in alphas_dict.values():
+   402                                                       alpha_param.value.data.clamp_(alpha_param.lb, alpha_param.ub)
+   403                                           
+   404                                                   verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+   405                                                   cert_dist = bounds.get_certification_distance()
+   406                                                   
+   407                                                   if verified:
+   408                                                       logger.warning(f'Certification Distance: {cert_dist}\n')
+   409                                                       return True
+   410                                                   
+   411                                                   if len(cd_window) == window_size:
+   412                                                       cd_window.pop(0)
+   413                                                       pi_window.pop(0)
+   414                                                       
+   415                                                   cd_window.append(cert_dist)
+   416                                                   perc_improvement = (cd_max - cert_dist) / cd_max
+   417                                                   pi_window.append(perc_improvement)
+   418                                                   
+   419                                                   cd_mean = np.mean(cd_window)
+   420                                                   cd_std = np.std(cd_window)
+   421                                                   in_upper_confidence_bound = cd_mean + 2 * cd_std >= 0
+   422                                                   
+   423                                                   pi_mean = np.mean(pi_window)
+   424                                                   pi_std = np.std(pi_window)
+   425                                                   
+   426                                                   new_cd_max = np.max(cd_window)
+   427                                                   if new_cd_max > cd_max:
+   428                                                       cd_max = new_cd_max
+   429                                                       patience_counter = patience
+   430                                                   else:
+   431                                                       patience_counter -= 1
+   432                                                   
+   433                                                   logger.warning(f'Epoch: {epoch} | Certification Distance: {cert_dist:4f} | Mean: {cd_mean:4f} | Std: {cd_std:4f} | Upper Confidence Bound: {cd_mean + 2 * cd_std:4f} | Max: {cd_max:4f} | Patience: {patience_counter} | Percentage Improvement {perc_improvement:4f} | Mean PI {pi_mean:4f} | Std PI: {pi_std:4f}\n')
+   434                                                   if epoch > min_epochs:
+   435                                                       if not in_upper_confidence_bound and patience_counter <= 0:
+   436                                                           logger.warning(f'Certification Distance: {cert_dist}\n')
+   437                                                           return False
+   438                                                   
+   439                                               return False
+

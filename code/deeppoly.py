@@ -250,7 +250,7 @@ class DiffLayer():
     def backsub(self, accum_c: DpConstraints):
         return constraints_mul(self.constraints, accum_c)
 
-
+@profile
 def deeppoly_backsub(dp_layers):
     constraints_acc = dp_layers[-1].constraints.copy()
     constraints_acc.ur = constraints_acc.ur.t()

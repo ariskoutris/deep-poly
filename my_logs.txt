@@ -21,7 +21,13 @@ vectorized:
     backsub_fix_early_stopping: 00:02:58
 
 All Test Cases:
-    Optim: 00:02:59
+    Optim:          00:02:59
+        FC:         00:00:16
+        CONV:       00:02:43
+    Not Optimized:  00:16:21
+        FC:         00:00:23
+        CONV:       00:15:58
+        
 Prelim Test Cases:
     Optim: 00:04:28
 
