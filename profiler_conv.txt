@@ -1,0 +1,160 @@
+not verified
+Wrote profile results to verifier.py.lprof
+Timer unit: 1e-06 s
+
+Total time: 2.14538 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: compute_bound at line 204
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   204                                               @profile 
+   205                                               def compute_bound(self, bounds: DpBounds):
+   206         2          1.0      0.5      0.0          if self.inp_shape != None and self.inp_shape == bounds.shape:
+   207                                                       r = self.constraints.lr
+   208                                                       o = self.constraints.lo
+   209                                                   else:
+   210         2          2.0      1.0      0.0              self.inp_shape = bounds.shape
+   211         2    2073748.0    1e+06     96.7              r, o, out_shape = self.compute_weight_matrix(bounds.shape)
+   212         2          9.0      4.5      0.0              self.constraints = DpConstraints(r, r, o, o)
+   213         2          0.0      0.0      0.0              self.out_shape = out_shape
+   214                                           
+   215         2      71563.0  35781.5      3.3          self.bounds = bounds_mul_constraints(DpConstraints(r.t(), r.t(), o, o), bounds)
+   216         2         48.0     24.0      0.0          self.bounds.lb = self.bounds.lb.view(self.out_shape)
+   217         2          4.0      2.0      0.0          self.bounds.ub = self.bounds.ub.view(self.out_shape)
+   218         2          0.0      0.0      0.0          return self.bounds
+
+Total time: 4.65862 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: propagate_sample at line 273
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   273                                           @profile
+   274                                           def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=None):
+   275         1         51.0     51.0      0.0      bounds = get_input_bounds(x, eps, min_val, max_val)
+   276         1          2.0      2.0      0.0      input_layer = DpInput(bounds)
+   277         1          0.0      0.0      0.0      dp_layers = [input_layer] if layers == None else layers
+   278         1        137.0    137.0      0.0      log_layer_bounds(logger, input_layer, 'Input Layer')
+   279        11         12.0      1.1      0.0      for i, layer in enumerate(model):
+   280        10          1.0      0.1      0.0          dp_layer = None
+   281        10          0.0      0.0      0.0          if layers != None:
+   282                                                       dp_layer = dp_layers[i + 1] # i + 1 as the first element is DpInput
+   283                                                       dp_layer.compute_bound(dp_layers[i].bounds)
+   284        10         11.0      1.1      0.0          elif isinstance(layer, nn.Flatten):
+   285         1          2.0      2.0      0.0              dp_layer = DpFlatten(layer)
+   286         1         49.0     49.0      0.0              dp_layer.compute_bound(dp_layers[i].bounds)
+   287         9          4.0      0.4      0.0          elif isinstance(layer, nn.Linear):
+   288         3         83.0     27.7      0.0              dp_layer = DpLinear(layer)
+   289         3       1417.0    472.3      0.0              dp_layer.compute_bound(dp_layers[i].bounds)
+   290         6          2.0      0.3      0.0          elif isinstance(layer, nn.ReLU):
+   291         2          8.0      4.0      0.0              dp_layer = DpRelu(layer, False)
+   292         2     126387.0  63193.5      2.7              dp_layer.compute_bound(dp_layers[i].bounds)
+   293         4          2.0      0.5      0.0          elif isinstance(layer, nn.LeakyReLU):
+   294         2          6.0      3.0      0.0              dp_layer = DpRelu(layer)
+   295         2        539.0    269.5      0.0              dp_layer.compute_bound(dp_layers[i].bounds)
+   296         2          0.0      0.0      0.0          elif isinstance(layer, nn.Conv2d):
+   297         2          3.0      1.5      0.0              dp_layer = DpConv(layer)
+   298         2    2145431.0    1e+06     46.1              dp_layer.compute_bound(dp_layers[i].bounds)
+   299                                           
+   300                                                   #dp_layer.compute_bound(dp_layers[i].bounds)
+   301        10          5.0      0.5      0.0          if layers == None:
+   302        10         11.0      1.1      0.0              dp_layers.append(dp_layer)
+   303                                                       
+   304                                                   #TODO: Call backsub only before RELUs
+   305        10         17.0      1.7      0.0          if not isinstance(layer, nn.Flatten):
+   306         9    2356505.0 261833.9     50.6              dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2]) # i + 2 as the first element is DpInput
+   307                                           
+   308        10       1017.0    101.7      0.0          log_layer_bounds(logger, dp_layer, f'Layer {i + 1} [{layer}]')
+   309                                           
+   310         1          0.0      0.0      0.0      if le_layer is not None:
+   311         1          0.0      0.0      0.0          if layers is None:
+   312         1          1.0      1.0      0.0              dp_layers.append(le_layer)
+   313         1      26841.0  26841.0      0.6              le_layer.bounds = deeppoly_backsub(dp_layers)
+   314                                                   else:
+   315                                                       dp_layers[-1] = le_layer
+   316                                                       le_layer.bounds = deeppoly_backsub(dp_layers)
+   317         1         73.0     73.0      0.0          log_layer_bounds(logger, le_layer, f'Layer {len(dp_layers) - 1} [{le_layer}]:')
+   318                                           
+   319         1          0.0      0.0      0.0      return dp_layers
+
+Total time: 4.65918 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: certify_sample at line 327
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   327                                           @profile
+   328                                           def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
+   329         1        243.0    243.0      0.0      model.double()
+   330         1          2.0      2.0      0.0      x.double()
+   331                                           
+   332         1          0.0      0.0      0.0      if x.dim() == 3:
+   333         1          3.0      3.0      0.0          x = x.unsqueeze(0)
+   334                                           
+   335         1          0.0      0.0      0.0      if use_le:
+   336         1          6.0      6.0      0.0          n_classes = model[-1].out_features
+   337         1        172.0    172.0      0.0          le_layer = DiffLayer(y, n_classes)
+   338         1    4658703.0    5e+06    100.0          dp_layers = propagate_sample(model, x, eps, le_layer=le_layer)
+   339                                               else:
+   340                                                   dp_layers = propagate_sample(model, x, eps)
+   341                                           
+   342         1          0.0      0.0      0.0      bounds = dp_layers[-1].bounds
+   343                                           
+   344         1         47.0     47.0      0.0      verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+   345         1          0.0      0.0      0.0      if verified:
+   346                                                   logger.warning(f'Certification Distance: {bounds.get_certification_distance()}')
+   347                                                   return True
+   348                                               else:
+   349         1          1.0      1.0      0.0          verified = certify_with_alphas(model, dp_layers, x, y, eps, use_le) if use_slope_opt else False
+   350                                           
+   351         1          0.0      0.0      0.0      return verified
+
+Total time: 0 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: certify_with_alphas at line 353
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   353                                           @profile
+   354                                           def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
+   355                                               
+   356                                               alphas_dict = init_alphas(model, x.shape)
+   357                                               if alphas_dict is None:
+   358                                                   return False
+   359                                               dp_layers = assign_alphas_to_relus(dp_layers, alphas_dict)
+   360                                           
+   361                                               loss_func = nn.CrossEntropyLoss() 
+   362                                               optimizer = torch.optim.Adam([alphas_dict[key].value for key in alphas_dict], lr=2)
+   363                                               
+   364                                               #TODO: Add early stopping
+   365                                               for _ in range(30):
+   366                                                   
+   367                                                   if use_le:
+   368                                                       n_classes = model[-1].out_features
+   369                                                       le_layer = DiffLayer(y, n_classes)
+   370                                                       dp_layers = propagate_sample(model, x, eps, le_layer=le_layer, layers=dp_layers)
+   371                                                   else:
+   372                                                       dp_layers = propagate_sample(model, x, eps, layers=dp_layers)
+   373                                                       
+   374                                                   bounds = dp_layers[-1].bounds
+   375                                                   
+   376                                                   if use_le:
+   377                                                       loss = torch.sum(-bounds.lb[bounds.lb < 0])
+   378                                                   else:
+   379                                                       loss = loss_func(bounds.get_loss_tensor(y), torch.tensor(y).view(1))
+   380                                                   
+   381                                                   optimizer.zero_grad()
+   382                                                   loss.backward()
+   383                                                   optimizer.step()
+   384                                                   
+   385                                                   for alpha_param in alphas_dict.values():
+   386                                                       alpha_param.value.data.clamp_(alpha_param.lb, alpha_param.ub)
+   387                                           
+   388                                                   verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+   389                                                   if verified:
+   390                                                       logger.warning(f'Certification Distance: {bounds.get_certification_distance()}\n')
+   391                                                       return True
+   392                                                   
+   393                                               return False
+

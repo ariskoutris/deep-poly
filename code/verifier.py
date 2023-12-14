@@ -8,7 +8,7 @@ import deeppoly, box
 import logging
 
 # Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
-logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
 
 DEVICE = "cpu"
 LOG = True
@@ -16,7 +16,7 @@ LOG = True
 def analyze(
     net: torch.nn.Module, inputs: torch.Tensor, eps: float, true_label: int
 ) -> bool:
-    return deeppoly.certify_sample(net, inputs, true_label, eps)
+    return deeppoly.certify_sample(net, inputs, true_label, eps, use_slope_opt=False)
 
 
 def main():
@@ -54,6 +54,7 @@ def main():
 
     net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)
     logging.info(net)
+    logging.info(f"Number of parameters: {sum(p.numel() for p in net.parameters())}")
 
     verified_status = None
     if args.labels:

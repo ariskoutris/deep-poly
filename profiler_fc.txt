@@ -1,0 +1,138 @@
+not verified
+Wrote profile results to verifier.py.lprof
+Timer unit: 1e-06 s
+
+Total time: 0.057079 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: propagate_sample at line 273
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   273                                           @profile
+   274                                           def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=None):
+   275         1         49.0     49.0      0.1      bounds = get_input_bounds(x, eps, min_val, max_val)
+   276         1          1.0      1.0      0.0      input_layer = DpInput(bounds)
+   277         1          0.0      0.0      0.0      dp_layers = [input_layer] if layers == None else layers
+   278         1        177.0    177.0      0.3      log_layer_bounds(logger, input_layer, 'Input Layer')
+   279        17         10.0      0.6      0.0      for i, layer in enumerate(model):
+   280        16          1.0      0.1      0.0          dp_layer = None
+   281        16          3.0      0.2      0.0          if layers != None:
+   282                                                       dp_layer = dp_layers[i + 1] # i + 1 as the first element is DpInput
+   283                                                       dp_layer.compute_bound(dp_layers[i].bounds)
+   284        16          8.0      0.5      0.0          elif isinstance(layer, nn.Flatten):
+   285         1          1.0      1.0      0.0              dp_layer = DpFlatten(layer)
+   286         1         26.0     26.0      0.0              dp_layer.compute_bound(dp_layers[i].bounds)
+   287        15          6.0      0.4      0.0          elif isinstance(layer, nn.Linear):
+   288         8        117.0     14.6      0.2              dp_layer = DpLinear(layer)
+   289         8       1214.0    151.8      2.1              dp_layer.compute_bound(dp_layers[i].bounds)
+   290         7          3.0      0.4      0.0          elif isinstance(layer, nn.ReLU):
+   291                                                       dp_layer = DpRelu(layer, False)
+   292                                                       dp_layer.compute_bound(dp_layers[i].bounds)
+   293         7          2.0      0.3      0.0          elif isinstance(layer, nn.LeakyReLU):
+   294         7         17.0      2.4      0.0              dp_layer = DpRelu(layer)
+   295         7       1822.0    260.3      3.2              dp_layer.compute_bound(dp_layers[i].bounds)
+   296                                                   elif isinstance(layer, nn.Conv2d):
+   297                                                       dp_layer = DpConv(layer)
+   298                                                       dp_layer.compute_bound(dp_layers[i].bounds)
+   299                                           
+   300                                                   #dp_layer.compute_bound(dp_layers[i].bounds)
+   301        16          5.0      0.3      0.0          if layers == None:
+   302        16          5.0      0.3      0.0              dp_layers.append(dp_layer)
+   303                                                       
+   304                                                   #TODO: Call backsub only before RELUs
+   305        16          7.0      0.4      0.0          if not isinstance(layer, nn.Flatten):
+   306        15      49459.0   3297.3     86.7              dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2]) # i + 2 as the first element is DpInput
+   307                                           
+   308        16       1430.0     89.4      2.5          log_layer_bounds(logger, dp_layer, f'Layer {i + 1} [{layer}]')
+   309                                           
+   310         1          0.0      0.0      0.0      if le_layer is not None:
+   311         1          0.0      0.0      0.0          if layers is None:
+   312         1          1.0      1.0      0.0              dp_layers.append(le_layer)
+   313         1       2639.0   2639.0      4.6              le_layer.bounds = deeppoly_backsub(dp_layers)
+   314                                                   else:
+   315                                                       dp_layers[-1] = le_layer
+   316                                                       le_layer.bounds = deeppoly_backsub(dp_layers)
+   317         1         76.0     76.0      0.1          log_layer_bounds(logger, le_layer, f'Layer {len(dp_layers) - 1} [{le_layer}]:')
+   318                                           
+   319         1          0.0      0.0      0.0      return dp_layers
+
+Total time: 0.057595 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: certify_sample at line 327
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   327                                           @profile
+   328                                           def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
+   329         1        209.0    209.0      0.4      model.double()
+   330         1          2.0      2.0      0.0      x.double()
+   331                                           
+   332         1          1.0      1.0      0.0      if x.dim() == 3:
+   333         1          1.0      1.0      0.0          x = x.unsqueeze(0)
+   334                                           
+   335         1          0.0      0.0      0.0      if use_le:
+   336         1          6.0      6.0      0.0          n_classes = model[-1].out_features
+   337         1        170.0    170.0      0.3          le_layer = DiffLayer(y, n_classes)
+   338         1      57166.0  57166.0     99.3          dp_layers = propagate_sample(model, x, eps, le_layer=le_layer)
+   339                                               else:
+   340                                                   dp_layers = propagate_sample(model, x, eps)
+   341                                           
+   342         1          0.0      0.0      0.0      bounds = dp_layers[-1].bounds
+   343                                           
+   344         1         38.0     38.0      0.1      verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+   345         1          1.0      1.0      0.0      if verified:
+   346                                                   logger.warning(f'Certification Distance: {bounds.get_certification_distance()}')
+   347                                                   return True
+   348                                               else:
+   349         1          1.0      1.0      0.0          verified = certify_with_alphas(model, dp_layers, x, y, eps, use_le) if use_slope_opt else False
+   350                                           
+   351         1          0.0      0.0      0.0      return verified
+
+Total time: 0 s
+File: /Users/ariskoutris/Documents/Reliable and Trustworthy AI/Projects/rtai-project-28/code/deeppoly.py
+Function: certify_with_alphas at line 353
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   353                                           @profile
+   354                                           def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
+   355                                               
+   356                                               alphas_dict = init_alphas(model, x.shape)
+   357                                               if alphas_dict is None:
+   358                                                   return False
+   359                                               dp_layers = assign_alphas_to_relus(dp_layers, alphas_dict)
+   360                                           
+   361                                               loss_func = nn.CrossEntropyLoss() 
+   362                                               optimizer = torch.optim.Adam([alphas_dict[key].value for key in alphas_dict], lr=2)
+   363                                               
+   364                                               #TODO: Add early stopping
+   365                                               for _ in range(30):
+   366                                                   
+   367                                                   if use_le:
+   368                                                       n_classes = model[-1].out_features
+   369                                                       le_layer = DiffLayer(y, n_classes)
+   370                                                       dp_layers = propagate_sample(model, x, eps, le_layer=le_layer, layers=dp_layers)
+   371                                                   else:
+   372                                                       dp_layers = propagate_sample(model, x, eps, layers=dp_layers)
+   373                                                       
+   374                                                   bounds = dp_layers[-1].bounds
+   375                                                   
+   376                                                   if use_le:
+   377                                                       loss = torch.sum(-bounds.lb[bounds.lb < 0])
+   378                                                   else:
+   379                                                       loss = loss_func(bounds.get_loss_tensor(y), torch.tensor(y).view(1))
+   380                                                   
+   381                                                   optimizer.zero_grad()
+   382                                                   loss.backward()
+   383                                                   optimizer.step()
+   384                                                   
+   385                                                   for alpha_param in alphas_dict.values():
+   386                                                       alpha_param.value.data.clamp_(alpha_param.lb, alpha_param.ub)
+   387                                           
+   388                                                   verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+   389                                                   if verified:
+   390                                                       logger.warning(f'Certification Distance: {bounds.get_certification_distance()}\n')
+   391                                                       return True
+   392                                                   
+   393                                               return False
+

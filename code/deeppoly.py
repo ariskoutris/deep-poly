@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from dp_utils import *
+
+from line_profiler import profile
 import logging
 logger = logging.getLogger(__name__)
 
@@ -148,6 +150,7 @@ class DpConv():
             return temp
         
         def get_weight_matrix(conv, inp_shape):
+            #TODO: Improve efficiency. Remove loops
             kernel = conv.weight.data.detach()
             C_out, C_in, K_h, K_w = kernel.shape
             N_in, C_in, H_i, W_i = inp_shape
@@ -198,7 +201,7 @@ class DpConv():
         #     test_weight(W, B, conv, inp_shape)
         return W, B, out_shape
 
-        
+    @profile 
     def compute_bound(self, bounds: DpBounds):
         if self.inp_shape != None and self.inp_shape == bounds.shape:
             r = self.constraints.lr
@@ -267,6 +270,7 @@ def deeppoly_backsub(dp_layers):
     logger.debug('[BACKSUBSTITUTION END]')
     return DpBounds(lb, ub)
 
+@profile
 def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=None):
     bounds = get_input_bounds(x, eps, min_val, max_val)
     input_layer = DpInput(bounds)
@@ -276,20 +280,28 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
         dp_layer = None
         if layers != None:
             dp_layer = dp_layers[i + 1] # i + 1 as the first element is DpInput
+            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.Flatten):
             dp_layer = DpFlatten(layer)
+            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.Linear):
             dp_layer = DpLinear(layer)
+            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.ReLU):
             dp_layer = DpRelu(layer, False)
+            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.LeakyReLU):
             dp_layer = DpRelu(layer)
+            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.Conv2d):
             dp_layer = DpConv(layer)
+            dp_layer.compute_bound(dp_layers[i].bounds)
 
-        dp_layer.compute_bound(dp_layers[i].bounds)
+        #dp_layer.compute_bound(dp_layers[i].bounds)
         if layers == None:
             dp_layers.append(dp_layer)
+            
+        #TODO: Call backsub only before RELUs
         if not isinstance(layer, nn.Flatten):
             dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2]) # i + 2 as the first element is DpInput
 
@@ -312,6 +324,7 @@ def assign_alphas_to_relus(dp_layers, alphas):
             layer.set_alphas(alphas[i - 1].value) # i - 1 as the first element of dp_layers is DpInput
     return dp_layers
 
+@profile
 def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
     model.double()
     x.double()
@@ -330,13 +343,14 @@ def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
 
     verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
     if verified:
-        logger.warning(f'Certification Distance: {bounds.get_certification_distance()}\n')
+        logger.warning(f'Certification Distance: {bounds.get_certification_distance()}')
         return True
     else:
         verified = certify_with_alphas(model, dp_layers, x, y, eps, use_le) if use_slope_opt else False
 
     return verified
-    
+
+@profile
 def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
     
     alphas_dict = init_alphas(model, x.shape)
@@ -347,6 +361,7 @@ def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
     loss_func = nn.CrossEntropyLoss() 
     optimizer = torch.optim.Adam([alphas_dict[key].value for key in alphas_dict], lr=2)
     
+    #TODO: Add early stopping
     for _ in range(30):
         
         if use_le:

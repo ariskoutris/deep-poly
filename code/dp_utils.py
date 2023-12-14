@@ -128,6 +128,7 @@ def init_alphas(model, inp_shape) -> list[torch.Tensor]:
     """
     Only linear layer can provide some guarantees of out_shape 
     which is why we need to calculate the out_shapes of other layers
+    TODO: Propagate dummy image to get relu input shapes
     """
     inp_shape = list(inp_shape)
     alphas = {}
