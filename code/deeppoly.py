@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from dp_utils import *
+import numpy as np
 
 from line_profiler import profile
 from time import perf_counter
@@ -276,7 +277,6 @@ def deeppoly_backsub(dp_layers):
 
 @profile
 def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=None):
-    time_start = perf_counter()
     bounds = get_input_bounds(x, eps, min_val, max_val)
     input_layer = DpInput(bounds)
     dp_layers = [input_layer] if layers == None else layers
@@ -324,7 +324,6 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
             le_layer.bounds = deeppoly_backsub(dp_layers)
         log_layer_bounds(logger, le_layer, f'Layer {len(dp_layers) - 1} [{le_layer}]:')
 
-    logger.warning(f'Propagation Time: {perf_counter() - time_start:.4f}')
     return dp_layers
 
 def assign_alphas_to_relus(dp_layers, alphas):
@@ -369,9 +368,17 @@ def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
 
     loss_func = nn.CrossEntropyLoss() 
     optimizer = torch.optim.Adam([alphas_dict[key].value for key in alphas_dict], lr=2)
+
+    # Early Stopping Parameters
+    num_epochs = 30
+    min_epochs = 3
+    window_size = 5
+    cd_window = []
+    cd_max = -1000
+    patience = 3
+    pi_window = []
     
-    #TODO: Add early stopping
-    for _ in range(30):
+    for epoch in range(num_epochs):
         
         if use_le:
             n_classes = model[-1].out_features
@@ -395,8 +402,38 @@ def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
             alpha_param.value.data.clamp_(alpha_param.lb, alpha_param.ub)
 
         verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
+        cert_dist = bounds.get_certification_distance()
+        
         if verified:
-            logger.warning(f'Certification Distance: {bounds.get_certification_distance()}\n')
+            logger.warning(f'Certification Distance: {cert_dist}\n')
             return True
+        
+        if len(cd_window) == window_size:
+            cd_window.pop(0)
+            pi_window.pop(0)
+            
+        cd_window.append(cert_dist)
+        perc_improvement = (cd_max - cert_dist) / cd_max
+        pi_window.append(perc_improvement)
+        
+        cd_mean = np.mean(cd_window)
+        cd_std = np.std(cd_window)
+        in_upper_confidence_bound = cd_mean + 2 * cd_std >= 0
+        
+        pi_mean = np.mean(pi_window)
+        pi_std = np.std(pi_window)
+        
+        new_cd_max = np.max(cd_window)
+        if new_cd_max > cd_max:
+            cd_max = new_cd_max
+            patience_counter = patience
+        else:
+            patience_counter -= 1
+        
+        logger.warning(f'Epoch: {epoch} | Certification Distance: {cert_dist:4f} | Mean: {cd_mean:4f} | Std: {cd_std:4f} | Upper Confidence Bound: {cd_mean + 2 * cd_std:4f} | Max: {cd_max:4f} | Patience: {patience_counter} | Percentage Improvement {perc_improvement:4f} | Mean PI {pi_mean:4f} | Std PI: {pi_std:4f}\n')
+        if epoch > min_epochs:
+            if not in_upper_confidence_bound and patience_counter <= 0:
+                logger.warning(f'Certification Distance: {cert_dist}\n')
+                return False
         
     return False
