@@ -140,15 +140,26 @@ class DpConv():
         self.inp_shape = None
         self.out_shape = None
     
+    @profile
     def compute_weight_matrix(self, inp_shape):
-        def get_weight(inp_shape, conv_row, conv_col, kernel):
-            temp = torch.zeros(inp_shape)
-            for c in range(kernel.shape[0]):
-                for i in range(kernel.shape[1]):
-                    for j in range(kernel.shape[2]):
-                        temp[c][conv_row + i][conv_col + j] = kernel[c][i][j]
-            return temp
         
+        @profile
+        def get_weight(inp_shape, conv_row, conv_col, kernel, vectorized=True):
+            temp = torch.zeros(inp_shape)
+            if vectorized:
+                end_row = conv_row + kernel.shape[1]
+                end_col = conv_col + kernel.shape[2]
+                temp[:, conv_row:end_row, conv_col:end_col] = kernel
+            else:
+                for c in range(kernel.shape[0]):
+                    for i in range(kernel.shape[1]):
+                        for j in range(kernel.shape[2]):
+                            temp[c][conv_row + i][conv_col + j] = kernel[c][i][j]
+
+            return temp
+
+        
+        @profile
         def get_weight_matrix(conv, inp_shape):
             #TODO: Improve efficiency. Remove loops
             kernel = conv.weight.data.detach()
