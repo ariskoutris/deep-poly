@@ -8,6 +8,8 @@ from time import perf_counter
 import logging
 logger = logging.getLogger(__name__)
 
+DTYPE = torch.float64
+
 class DpInput():
     def __init__(self, bounds: DpBounds):
         self.layer = None
@@ -83,7 +85,7 @@ class DpRelu():
             self.bias_upper = bias_common
 
             if self.alphas == None:
-                self.neg_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope).to(dtype=torch.double)
+                self.neg_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope).to(dtype=DTYPE)
             else:
                 self.neg_slope = self.alphas
             self.bias_lower = torch.zeros_like(self.bias_upper)
@@ -92,7 +94,7 @@ class DpRelu():
             self.bias_lower = bias_common
 
             if self.alphas == None:
-                self.pos_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope).to(dtype=torch.double)
+                self.pos_slope = torch.where(-bounds.lb < bounds.ub, 1.0, self.relu_neg_slope).to(dtype=DTYPE)
             else:
                 self.pos_slope = self.alphas
             self.bias_upper = torch.zeros_like(self.bias_lower)
@@ -166,7 +168,7 @@ class DpConv():
             H_grd, W_grd = H_o, H_i
             H_blk, W_blk = W_o, W_i
 
-            W_conv = torch.zeros((C_out, H_grd, H_blk, C_in, W_grd, W_blk), dtype=torch.double)
+            W_conv = torch.zeros((C_out, H_grd, H_blk, C_in, W_grd, W_blk), dtype=DTYPE)
 
             for c in range(C_out):
                 for i in range(H_o):
@@ -198,7 +200,7 @@ class DpConv():
         W.shape[1] == B.shape[0]
 
         # def test_weight(T, B, conv, inp_shape):
-        #     i = torch.randn(*inp_shape, dtype = torch.double)
+        #     i = torch.randn(*inp_shape, dtype = DTYPE)
         #     out = i.flatten() @ T.t() + B
         #     print(torch.allclose(conv(i).flatten(), out.flatten(), atol=1e-06))
 
@@ -240,7 +242,7 @@ class DiffLayer():
 
     def compute_constraints(self, target: int = None, n_classes: int = None):
         I = [i for i in range(n_classes) if i != target]
-        C = torch.eye(n_classes, dtype=torch.double)[target].unsqueeze(dim=0) - torch.eye(n_classes, dtype=torch.double)[I]
+        C = torch.eye(n_classes, dtype=DTYPE)[target].unsqueeze(dim=0) - torch.eye(n_classes, dtype=DTYPE)[I]
         lr, ur = C, C
         lo = torch.zeros_like(lr[:, 0])
         uo = torch.zeros_like(ur[:, 0])
@@ -334,8 +336,8 @@ def assign_alphas_to_relus(dp_layers, alphas):
 
 @profile
 def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
-    model.double()
-    x.double()
+    model = model.to(dtype=DTYPE)
+    x = x.to(dtype=DTYPE)
 
     if x.dim() == 3:
         x = x.unsqueeze(0)

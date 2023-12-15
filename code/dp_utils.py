@@ -3,6 +3,8 @@ import torch.nn as nn
 import logging
 logger = logging.getLogger(__name__)
 
+DTYPE = torch.float64
+
 class DpConstraints:
     def __init__(self, lr: torch.Tensor, ur: torch.Tensor, lo: torch.Tensor, uo: torch.Tensor):
         self.lr = lr
@@ -51,10 +53,10 @@ class DpBounds:
             return (self.lb.flatten()[target] - self.ub.flatten().max()).min().item()
 
 def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
-    lb = (x - eps).to(torch.double)
+    lb = (x - eps).to(DTYPE)
     lb.clamp_(min=min_val, max=max_val)
 
-    ub = (x + eps).to(torch.double)
+    ub = (x + eps).to(DTYPE)
     ub.clamp_(min=min_val, max=max_val)
 
     return DpBounds(lb, ub)
@@ -152,14 +154,14 @@ def init_alphas(model, inp_shape) -> list[torch.Tensor]:
             has_relus = True
             out_shape = inp_shape.copy()
             lb, ub = 0.0, 1.0
-            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(inp_shape, dtype=torch.double)))
+            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(inp_shape, dtype=DTYPE)))
             alphas[i] = AlphaParams(value=initial_alphas, lb=lb, ub=ub)
         elif isinstance(layer, nn.LeakyReLU):
             has_relus = True
             out_shape = inp_shape.copy()
             lb = min(1.0, layer.negative_slope)
             ub = max(1.0, layer.negative_slope)
-            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(inp_shape, dtype=torch.double)))
+            initial_alphas = nn.Parameter(lb + (ub - lb) * (torch.rand(inp_shape, dtype=DTYPE)))
             alphas[i] = AlphaParams(value=initial_alphas, lb=lb, ub=ub)
         elif isinstance(layer, nn.Conv2d):
             C, H, W = inp_shape[-3:]
