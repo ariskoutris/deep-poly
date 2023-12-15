@@ -353,13 +353,20 @@ def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
     if verified:
         logger.warning(f'Certification Distance: {bounds.get_certification_distance()}')
         return True
-    else:
-        verified = certify_with_alphas(model, dp_layers, x, y, eps, use_le) if use_slope_opt else False
 
+    if not use_slope_opt:
+        return False
+    
+    num_restarts = 1
+    for _ in range(num_restarts):
+        verified = certify_with_alphas(model, dp_layers, x, y, eps, 30, use_le)
+        if verified:
+            break
+        
     return verified
 
 @profile
-def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
+def certify_with_alphas(model, dp_layers, x, y, eps, num_epochs, use_le=True):
     
     alphas_dict = init_alphas(model, x.shape)
     if alphas_dict is None:
@@ -372,11 +379,12 @@ def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
     # Early Stopping Parameters
     num_epochs = 30
     min_epochs = 3
-    window_size = 5
+    window_size = 3
     cd_window = []
     cd_max = -1000
-    patience = 3
+    patience = 2
     pi_window = []
+    min_pi = 0.04
     
     for epoch in range(num_epochs):
         
@@ -403,7 +411,7 @@ def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
 
         verified = check_postcondition_le(bounds) if use_le else check_postcondition(y, bounds)
         cert_dist = bounds.get_certification_distance()
-        
+
         if verified:
             logger.warning(f'Certification Distance: {cert_dist}\n')
             return True
@@ -418,7 +426,8 @@ def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
         
         cd_mean = np.mean(cd_window)
         cd_std = np.std(cd_window)
-        in_upper_confidence_bound = cd_mean + 2 * cd_std >= 0
+        upper_confidence_bound = cd_mean + 2 * cd_std
+        in_upper_confidence_bound = upper_confidence_bound >= 0
         
         pi_mean = np.mean(pi_window)
         pi_std = np.std(pi_window)
@@ -426,12 +435,14 @@ def certify_with_alphas(model, dp_layers, x, y, eps, use_le=True):
         new_cd_max = np.max(cd_window)
         if new_cd_max > cd_max:
             cd_max = new_cd_max
+            
+        if perc_improvement > min_pi:
             patience_counter = patience
         else:
             patience_counter -= 1
         
-        logger.warning(f'Epoch: {epoch} | Certification Distance: {cert_dist:4f} | Mean: {cd_mean:4f} | Std: {cd_std:4f} | Upper Confidence Bound: {cd_mean + 2 * cd_std:4f} | Max: {cd_max:4f} | Patience: {patience_counter} | Percentage Improvement {perc_improvement:4f} | Mean PI {pi_mean:4f} | Std PI: {pi_std:4f}\n')
-        if epoch > min_epochs:
+        logger.warning(f'Epoch: {epoch} | Certification Distance: {cert_dist:4f} | Mean: {cd_mean:4f} | Std: {cd_std:4f} | Upper Confidence Bound: {upper_confidence_bound:4f} | In Upper Confidence Bound: {in_upper_confidence_bound} | Max: {cd_max:4f} | Patience: {patience_counter} | Percentage Improvement {perc_improvement:4f} | Mean PI {pi_mean:4f} | Std PI: {pi_std:4f}\n')
+        if epoch >= min_epochs:
             if not in_upper_confidence_bound and patience_counter <= 0:
                 logger.warning(f'Certification Distance: {cert_dist}\n')
                 return False
