@@ -369,9 +369,9 @@ def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
 
 @profile
 def certify_with_alphas(model, dp_layers, x, y, eps, num_epochs, use_le=True):
-    
+
     alphas_dict = init_alphas(model, x.shape)
-    if alphas_dict is None:
+    if len(alphas_dict) == 0:
         return False
     dp_layers = assign_alphas_to_relus(dp_layers, alphas_dict)
 
