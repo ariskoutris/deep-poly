@@ -6,9 +6,10 @@ from utils.loading import parse_spec
 import deeppoly, box
 
 import logging
+from time import perf_counter
 
 # Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
+logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
 
 DEVICE = "cpu"
 LOG = True
@@ -72,14 +73,20 @@ def main():
     pred_label = out.max(dim=1)[1].item()
     assert pred_label == true_label
 
+    start_time = perf_counter()
     if analyze(net, image, eps, true_label):
         status_msg = "verified"
         if verified_status != None: status_msg += '\t✅' if verified_status else '\t🛑 (❗️)'
-        print(status_msg)
     else:
         status_msg = "not verified"
         if verified_status != None: status_msg += u'\t🛑' if verified_status else '\t✅'
-        print(status_msg)
+        
+    elapsed_time = perf_counter() - start_time
+    status_msg += f'\t({elapsed_time:.2f}s)'
+    timeout = (elapsed_time > 60.0)
+    if timeout:
+        status_msg += ' ⏳'
+    print(status_msg)
 
 
 if __name__ == "__main__":
