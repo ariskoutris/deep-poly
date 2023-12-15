@@ -12,7 +12,7 @@ from time import perf_counter
 logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
 
 DEVICE = "cpu"
-LOG = True
+TIMER = True
 
 def analyze(
     net: torch.nn.Module, inputs: torch.Tensor, eps: float, true_label: int
@@ -80,12 +80,14 @@ def main():
     else:
         status_msg = "not verified"
         if verified_status != None: status_msg += u'\t🛑' if verified_status else '\t✅'
-        
-    elapsed_time = perf_counter() - start_time
-    status_msg += f'\t({elapsed_time:.2f}s)'
-    timeout = (elapsed_time > 60.0)
-    if timeout:
-        status_msg += ' ⏳'
+    
+    if TIMER:
+        elapsed_time = perf_counter() - start_time
+        status_msg += f'\t({elapsed_time:.2f}s)'
+        timeout = (elapsed_time > 60.0)
+        if timeout:
+            status_msg += ' ⏳'
+            
     print(status_msg)
 
 
