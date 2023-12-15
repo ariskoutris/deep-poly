@@ -1,0 +1,20 @@
+#!/bin/bash
+
+start_total=$(date +%s.%N)
+count=0
+
+for i in {1..5}
+do
+    start=$(date +%s.%N)
+    bash code/evaluate
+    end=$(date +%s.%N)
+    duration=$(echo "$end - $start" | bc)
+    printf "Time for iteration $i: %.2f seconds\n\n" "$duration"
+    count=$((count + 1))
+done
+
+end_total=$(date +%s.%N)
+total_duration=$(echo "$end_total - $start_total" | bc)
+average_duration=$(echo "$total_duration / $count" | bc)
+
+printf "Average time per iteration: %.2f seconds\n" "$average_duration"
