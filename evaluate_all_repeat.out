@@ -1,0 +1,492 @@
+(rtai-project) ariskoutris@Ariss-Air rtai-project-28 % bash code/evaluate_all_repeat           
+Evaluating network fc_base on base...
+not verified    ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_1 on base...
+not verified    ✅      (0.20s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on base...
+not verified    ✅      (0.40s)
+verified        ✅      (0.01s)
+Evaluating network fc_3 on base...
+not verified    ✅      (0.46s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on base...
+not verified    ✅      (0.46s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on base...
+not verified    ✅      (0.73s)
+verified        ✅      (0.01s)
+Evaluating network fc_6 on base...
+not verified    ✅      (2.53s)
+not verified    ✅      (1.33s)
+verified        ✅      (0.03s)
+verified        ✅      (0.01s)
+Evaluating network fc_7 on base...
+not verified    ✅      (2.43s)
+verified        ✅      (0.43s)
+Evaluating network conv_base on base...
+not verified    ✅      (0.06s)
+verified        ✅      (0.05s)
+verified        ✅      (0.05s)
+verified        ✅      (0.05s)
+verified        ✅      (0.05s)
+Evaluating network conv_1 on base...
+not verified    ✅      (11.09s)
+verified        ✅      (0.17s)
+Evaluating network conv_2 on base...
+not verified    ✅      (51.79s)
+verified        ✅      (0.45s)
+Evaluating network conv_3 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.39s)
+Evaluating network conv_4 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.83s)
+--------------------------------------------------------------------
+Evaluating network fc_1 on prelim...
+not verified    ✅      (0.21s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on prelim...
+not verified    ✅      (0.41s)
+verified        ✅      (0.01s)
+verified        ✅      (0.03s)
+Evaluating network fc_3 on prelim...
+not verified    ✅      (0.42s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on prelim...
+not verified    ✅      (0.44s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on prelim...
+not verified    ✅      (0.78s)
+verified        ✅      (0.01s)
+verified        ✅      (0.05s)
+Evaluating network fc_6 on prelim...
+not verified    ✅      (2.56s)
+not verified    ✅      (1.51s)
+not verified    ✅      (2.71s)
+verified        ✅      (0.01s)
+verified        ✅      (0.03s)
+verified        ✅      (0.08s)
+Evaluating network fc_7 on prelim...
+not verified    ✅      (3.05s)
+verified        ✅      (0.02s)
+verified        ✅      (0.02s)
+Evaluating network conv_1 on prelim...
+not verified    ✅      (10.90s)
+verified        ✅      (0.16s)
+verified        ✅      (0.16s)
+Evaluating network conv_2 on prelim...
+not verified    ✅      (41.61s)
+verified        ✅      (0.44s)
+verified        ✅      (0.45s)
+Evaluating network conv_3 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.39s)
+verified        ✅      (2.38s)
+Evaluating network conv_4 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.80s)
+verified        ✅      (20.24s)
+--------------------------------------------------------------------
+Time for iteration 1: 986.00 seconds
+
+Evaluating network fc_base on base...
+not verified    ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_1 on base...
+not verified    ✅      (0.22s)
+verified        ✅      (0.01s)
+Evaluating network fc_2 on base...
+not verified    ✅      (0.48s)
+verified        ✅      (0.01s)
+Evaluating network fc_3 on base...
+not verified    ✅      (0.49s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on base...
+not verified    ✅      (0.47s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on base...
+not verified    ✅      (0.70s)
+verified        ✅      (0.01s)
+Evaluating network fc_6 on base...
+not verified    ✅      (2.55s)
+not verified    ✅      (1.47s)
+verified        ✅      (0.03s)
+verified        ✅      (0.01s)
+Evaluating network fc_7 on base...
+not verified    ✅      (2.42s)
+verified        ✅      (0.52s)
+Evaluating network conv_base on base...
+not verified    ✅      (0.06s)
+verified        ✅      (0.06s)
+verified        ✅      (0.06s)
+verified        ✅      (0.06s)
+verified        ✅      (0.06s)
+Evaluating network conv_1 on base...
+not verified    ✅      (11.67s)
+verified        ✅      (0.16s)
+Evaluating network conv_2 on base...
+not verified    ✅      (53.56s)
+verified        ✅      (0.45s)
+Evaluating network conv_3 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.49s)
+Evaluating network conv_4 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.80s)
+--------------------------------------------------------------------
+Evaluating network fc_1 on prelim...
+not verified    ✅      (0.21s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on prelim...
+not verified    ✅      (0.41s)
+verified        ✅      (0.01s)
+verified        ✅      (0.03s)
+Evaluating network fc_3 on prelim...
+not verified    ✅      (0.39s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on prelim...
+not verified    ✅      (0.42s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on prelim...
+not verified    ✅      (0.67s)
+verified        ✅      (0.01s)
+verified        ✅      (0.04s)
+Evaluating network fc_6 on prelim...
+not verified    ✅      (2.37s)
+not verified    ✅      (1.65s)
+not verified    ✅      (3.41s)
+verified        ✅      (0.01s)
+verified        ✅      (0.02s)
+verified        ✅      (0.11s)
+Evaluating network fc_7 on prelim...
+not verified    ✅      (3.10s)
+verified        ✅      (0.02s)
+verified        ✅      (0.02s)
+Evaluating network conv_1 on prelim...
+not verified    ✅      (11.54s)
+verified        ✅      (0.16s)
+verified        ✅      (0.17s)
+Evaluating network conv_2 on prelim...
+not verified    ✅      (43.31s)
+verified        ✅      (0.45s)
+verified        ✅      (0.45s)
+Evaluating network conv_3 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.38s)
+verified        ✅      (2.40s)
+Evaluating network conv_4 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.80s)
+verified        ✅      (18.69s)
+--------------------------------------------------------------------
+Time for iteration 2: 971.00 seconds
+
+Evaluating network fc_base on base...
+not verified    ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_1 on base...
+not verified    ✅      (0.21s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on base...
+not verified    ✅      (0.47s)
+verified        ✅      (0.01s)
+Evaluating network fc_3 on base...
+not verified    ✅      (0.48s)
+verified        ✅      (0.00s)
+Evaluating network fc_4 on base...
+not verified    ✅      (0.42s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on base...
+not verified    ✅      (0.69s)
+verified        ✅      (0.01s)
+Evaluating network fc_6 on base...
+not verified    ✅      (2.62s)
+not verified    ✅      (1.35s)
+verified        ✅      (0.03s)
+verified        ✅      (0.01s)
+Evaluating network fc_7 on base...
+not verified    ✅      (2.61s)
+verified        ✅      (0.54s)
+Evaluating network conv_base on base...
+not verified    ✅      (0.06s)
+verified        ✅      (0.06s)
+verified        ✅      (0.05s)
+verified        ✅      (0.05s)
+verified        ✅      (0.06s)
+Evaluating network conv_1 on base...
+not verified    ✅      (10.97s)
+verified        ✅      (0.16s)
+Evaluating network conv_2 on base...
+not verified    ✅      (54.33s)
+verified        ✅      (0.45s)
+Evaluating network conv_3 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.60s)
+Evaluating network conv_4 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.89s)
+--------------------------------------------------------------------
+Evaluating network fc_1 on prelim...
+not verified    ✅      (0.26s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on prelim...
+not verified    ✅      (0.45s)
+verified        ✅      (0.01s)
+verified        ✅      (0.03s)
+Evaluating network fc_3 on prelim...
+not verified    ✅      (0.44s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on prelim...
+not verified    ✅      (0.46s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on prelim...
+not verified    ✅      (0.69s)
+verified        ✅      (0.01s)
+verified        ✅      (0.04s)
+Evaluating network fc_6 on prelim...
+not verified    ✅      (2.76s)
+not verified    ✅      (1.60s)
+not verified    ✅      (3.15s)
+verified        ✅      (0.01s)
+verified        ✅      (0.03s)
+verified        ✅      (0.09s)
+Evaluating network fc_7 on prelim...
+not verified    ✅      (3.17s)
+verified        ✅      (0.02s)
+verified        ✅      (0.02s)
+Evaluating network conv_1 on prelim...
+not verified    ✅      (13.70s)
+verified        ✅      (0.27s)
+verified        ✅      (0.17s)
+Evaluating network conv_2 on prelim...
+not verified    ✅      (52.62s)
+verified        ✅      (0.47s)
+verified        ✅      (0.46s)
+Evaluating network conv_3 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.40s)
+verified        ✅      (2.38s)
+Evaluating network conv_4 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.81s)
+verified        ✅      (17.39s)
+--------------------------------------------------------------------
+Time for iteration 3: 1049.00 seconds
+
+Evaluating network fc_base on base...
+not verified    ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_1 on base...
+not verified    ✅      (0.25s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on base...
+not verified    ✅      (0.48s)
+verified        ✅      (0.01s)
+Evaluating network fc_3 on base...
+not verified    ✅      (0.40s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on base...
+not verified    ✅      (0.48s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on base...
+not verified    ✅      (0.77s)
+verified        ✅      (0.01s)
+Evaluating network fc_6 on base...
+not verified    ✅      (2.63s)
+not verified    ✅      (1.49s)
+verified        ✅      (0.03s)
+verified        ✅      (0.01s)
+Evaluating network fc_7 on base...
+not verified    ✅      (2.38s)
+verified        ✅      (0.43s)
+Evaluating network conv_base on base...
+not verified    ✅      (0.06s)
+verified        ✅      (0.06s)
+verified        ✅      (0.06s)
+verified        ✅      (0.06s)
+verified        ✅      (0.06s)
+Evaluating network conv_1 on base...
+not verified    ✅      (10.86s)
+verified        ✅      (0.17s)
+Evaluating network conv_2 on base...
+not verified    ✅      (52.51s)
+verified        ✅      (0.45s)
+Evaluating network conv_3 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.38s)
+Evaluating network conv_4 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.80s)
+--------------------------------------------------------------------
+Evaluating network fc_1 on prelim...
+not verified    ✅      (0.21s)
+verified        ✅      (0.01s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on prelim...
+not verified    ✅      (0.42s)
+verified        ✅      (0.01s)
+verified        ✅      (0.04s)
+Evaluating network fc_3 on prelim...
+not verified    ✅      (0.43s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on prelim...
+not verified    ✅      (0.44s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on prelim...
+not verified    ✅      (0.70s)
+verified        ✅      (0.01s)
+verified        ✅      (0.04s)
+Evaluating network fc_6 on prelim...
+not verified    ✅      (2.36s)
+not verified    ✅      (1.55s)
+not verified    ✅      (2.81s)
+verified        ✅      (0.02s)
+verified        ✅      (0.02s)
+verified        ✅      (0.08s)
+Evaluating network fc_7 on prelim...
+not verified    ✅      (3.11s)
+verified        ✅      (0.02s)
+verified        ✅      (0.03s)
+Evaluating network conv_1 on prelim...
+not verified    ✅      (11.35s)
+verified        ✅      (0.16s)
+verified        ✅      (0.16s)
+Evaluating network conv_2 on prelim...
+not verified    ✅      (41.95s)
+verified        ✅      (0.45s)
+verified        ✅      (0.44s)
+Evaluating network conv_3 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.36s)
+verified        ✅      (2.39s)
+Evaluating network conv_4 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.81s)
+verified        ✅      (35.24s)
+--------------------------------------------------------------------
+Time for iteration 4: 1003.00 seconds
+
+Evaluating network fc_base on base...
+not verified    ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_1 on base...
+not verified    ✅      (0.20s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on base...
+not verified    ✅      (0.42s)
+verified        ✅      (0.01s)
+Evaluating network fc_3 on base...
+not verified    ✅      (0.39s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on base...
+not verified    ✅      (0.52s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on base...
+not verified    ✅      (0.71s)
+verified        ✅      (0.01s)
+Evaluating network fc_6 on base...
+not verified    ✅      (2.66s)
+not verified    ✅      (1.51s)
+verified        ✅      (0.32s)
+verified        ✅      (0.01s)
+Evaluating network fc_7 on base...
+not verified    ✅      (2.40s)
+verified        ✅      (0.55s)
+Evaluating network conv_base on base...
+not verified    ✅      (0.06s)
+verified        ✅      (0.05s)
+verified        ✅      (0.05s)
+verified        ✅      (0.06s)
+verified        ✅      (0.05s)
+Evaluating network conv_1 on base...
+not verified    ✅      (11.10s)
+verified        ✅      (0.17s)
+Evaluating network conv_2 on base...
+not verified    ✅      (51.79s)
+verified        ✅      (0.45s)
+Evaluating network conv_3 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.37s)
+Evaluating network conv_4 on base...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.79s)
+--------------------------------------------------------------------
+Evaluating network fc_1 on prelim...
+not verified    ✅      (0.20s)
+verified        ✅      (0.00s)
+verified        ✅      (0.00s)
+Evaluating network fc_2 on prelim...
+not verified    ✅      (0.42s)
+verified        ✅      (0.01s)
+verified        ✅      (0.03s)
+Evaluating network fc_3 on prelim...
+not verified    ✅      (0.40s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_4 on prelim...
+not verified    ✅      (0.43s)
+verified        ✅      (0.01s)
+verified        ✅      (0.01s)
+Evaluating network fc_5 on prelim...
+not verified    ✅      (0.77s)
+verified        ✅      (0.01s)
+verified        ✅      (0.04s)
+Evaluating network fc_6 on prelim...
+not verified    ✅      (2.42s)
+not verified    ✅      (1.54s)
+not verified    ✅      (2.86s)
+verified        ✅      (0.01s)
+verified        ✅      (0.03s)
+verified        ✅      (0.08s)
+Evaluating network fc_7 on prelim...
+not verified    ✅      (3.01s)
+verified        ✅      (0.03s)
+verified        ✅      (0.02s)
+Evaluating network conv_1 on prelim...
+not verified    ✅      (10.84s)
+verified        ✅      (0.17s)
+verified        ✅      (0.17s)
+Evaluating network conv_2 on prelim...
+not verified    ✅      (42.84s)
+verified        ✅      (0.45s)
+verified        ✅      (0.44s)
+Evaluating network conv_3 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (2.39s)
+verified        ✅      (2.37s)
+Evaluating network conv_4 on prelim...
+not verified    ✅      (60.01s) ⏳
+verified        ✅      (0.80s)
+verified        ✅      (17.52s)
+--------------------------------------------------------------------
+Time for iteration 5: 948.00 seconds
+
+Average time per iteration: 991.00 seconds
