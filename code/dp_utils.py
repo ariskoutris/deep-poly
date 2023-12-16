@@ -63,13 +63,15 @@ def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
 
 # TODO: Improve efficiency
 def constraints_mul(curr_c : DpConstraints, accum_c : DpConstraints) -> DpConstraints:
-    accum_c_lr_pos = torch.relu(accum_c.lr)
-    accum_c_lr_neg = -torch.relu(-accum_c.lr)
-    accum_c_ur_pos = torch.relu(accum_c.ur)
-    accum_c_ur_neg = -torch.relu(-accum_c.ur)
+    accum_c_lr_pos = torch.clamp(accum_c.lr, min=0)
+    accum_c_lr_neg = torch.clamp(accum_c.lr, max=0)
+    accum_c_ur_pos = torch.clamp(accum_c.ur, min=0)
+    accum_c_ur_neg = torch.clamp(accum_c.ur, max=0)
 
-    lr =  curr_c.lr.t() @ accum_c_lr_pos +  curr_c.ur.t() @ accum_c_lr_neg
-    ur =  curr_c.ur.t() @ accum_c_ur_pos +  curr_c.lr.t() @ accum_c_ur_neg
+    curr_c_lr_t = curr_c.lr.t()
+    curr_c_ur_t = curr_c.ur.t()
+    lr =  curr_c_lr_t @ accum_c_lr_pos +  curr_c_ur_t @ accum_c_lr_neg
+    ur =  curr_c_ur_t @ accum_c_ur_pos +  curr_c_lr_t @ accum_c_ur_neg
     lo = curr_c.lo @ accum_c_lr_pos + curr_c.uo @ accum_c_lr_neg
     uo = curr_c.uo @ accum_c_ur_pos + curr_c.lo @ accum_c_ur_neg
     uo = uo + accum_c.uo
@@ -78,13 +80,15 @@ def constraints_mul(curr_c : DpConstraints, accum_c : DpConstraints) -> DpConstr
     return DpConstraints(lr, ur, lo, uo)
 
 def bounds_mul_constraints(constraints : DpConstraints, bounds : DpBounds) -> DpBounds:
-    lr_pos = torch.relu(constraints.lr)
-    lr_neg = -torch.relu(-constraints.lr)
-    ur_pos = torch.relu(constraints.ur)
-    ur_neg = -torch.relu(-constraints.ur)
+    lr_pos = torch.clamp(constraints.lr, min=0)
+    lr_neg = torch.clamp(constraints.lr, max=0)
+    ur_pos = torch.clamp(constraints.ur, min=0)
+    ur_neg = torch.clamp(constraints.ur, max=0)
 
-    lb = bounds.lb.flatten() @ lr_pos + bounds.ub.flatten() @ lr_neg + constraints.lo
-    ub = bounds.ub.flatten() @ ur_pos + bounds.lb.flatten() @ ur_neg + constraints.uo
+    bounds_lb_flatten = bounds.lb.flatten()
+    bounds_ub_flatten = bounds.ub.flatten()
+    lb = bounds_lb_flatten @ lr_pos + bounds_ub_flatten @ lr_neg + constraints.lo
+    ub = bounds_ub_flatten @ ur_pos + bounds_lb_flatten @ ur_neg + constraints.uo
 
     return DpBounds(lb, ub)
 
