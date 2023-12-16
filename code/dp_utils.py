@@ -3,7 +3,7 @@ import torch.nn as nn
 import logging
 logger = logging.getLogger(__name__)
 
-DTYPE = torch.float64
+DTYPE = torch.float32
 
 class DpConstraints:
     def __init__(self, lr: torch.Tensor, ur: torch.Tensor, lo: torch.Tensor, uo: torch.Tensor):

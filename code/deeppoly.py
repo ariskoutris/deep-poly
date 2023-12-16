@@ -8,7 +8,7 @@ from time import perf_counter
 import logging
 logger = logging.getLogger(__name__)
 
-DTYPE = torch.float64
+DTYPE = torch.float32
 
 class DpInput():
     def __init__(self, bounds: DpBounds):
