@@ -359,7 +359,7 @@ def certify_sample(model, x, y, eps, use_le=True, use_slope_opt=True) -> bool:
     if not use_slope_opt:
         return False
     
-    num_restarts = 1
+    num_restarts = 10
     for _ in range(num_restarts):
         verified = certify_with_alphas(model, dp_layers, x, y, eps, 30, use_le)
         if verified:
@@ -384,7 +384,7 @@ def certify_with_alphas(model, dp_layers, x, y, eps, num_epochs, use_le=True):
     window_size = 3
     cd_window = []
     cd_max = -1000
-    patience = 2
+    patience = 5
     pi_window = []
     min_pi = 0.04
     
