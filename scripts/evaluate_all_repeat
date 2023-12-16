@@ -6,7 +6,7 @@ count=0
 for i in {1..5}
 do
     start=$(date +%s.%N)
-    bash code/evaluate_all
+    bash scripts/evaluate_all
     end=$(date +%s.%N)
     duration=$(echo "$end - $start" | bc)
     printf "Time for iteration $i: %.2f seconds\n\n" "$duration"
