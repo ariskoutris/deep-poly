@@ -7,6 +7,7 @@ import deeppoly, box
 
 import logging
 from time import perf_counter
+import concurrent.futures
 
 # Configure logging. Set level to [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL] (in order) to control verbosity.
 logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s', datefmt='%X')
@@ -73,21 +74,33 @@ def main():
     pred_label = out.max(dim=1)[1].item()
     assert pred_label == true_label
 
+    def analyze_wrapper(args):
+        return analyze(*args)
+
     start_time = perf_counter()
-    if analyze(net, image, eps, true_label):
-        status_msg = "verified"
-        if verified_status != None: status_msg += '\t✅' if verified_status else '\t🛑 (❗️)'
-    else:
-        status_msg = "not verified"
-        if verified_status != None: status_msg += u'\t🛑' if verified_status else '\t✅'
-    
-    if TIMER:
-        elapsed_time = perf_counter() - start_time
-        status_msg += f'\t({elapsed_time:.2f}s)'
-        timeout = (elapsed_time > 60.0)
-        if timeout:
-            status_msg += ' ⏳'
-            
+
+    # Define the arguments for the analyze function
+    args = (net, image, eps, true_label)
+
+    # Use ThreadPoolExecutor to run analyze with a timeout
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(analyze_wrapper, args)
+        try:
+            result = future.result(timeout=60)
+            if result:
+                status_msg = "verified"
+                if verified_status != None: status_msg += '\t✅' if verified_status else '\t🛑 (❗️)'
+            else:
+                status_msg = "not verified"
+                if verified_status != None: status_msg += u'\t🛑' if verified_status else '\t✅'
+            if TIMER:
+                status_msg += f"\t({perf_counter() - start_time:.2f}s)"
+        except concurrent.futures.TimeoutError:
+            status_msg = "not verified"
+            if verified_status != None: status_msg += u'\t🛑' if verified_status else '\t✅'
+            if TIMER:
+                status_msg += f"\t({perf_counter() - start_time:.2f}s)"
+                status_msg += ' ⏳'
     print(status_msg)
 
 
