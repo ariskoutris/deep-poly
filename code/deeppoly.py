@@ -157,7 +157,7 @@ class DpConv():
         
         @profile
         def get_weight_matrix(conv, inp_shape):
-            #TODO: Improve efficiency. Remove loops
+            #TODO: Improve efficiency further
             kernel = conv.weight.data.detach()
             C_out, C_in, K_h, K_w = kernel.shape
             N_in, C_in, H_i, W_i = inp_shape
@@ -252,12 +252,10 @@ def deeppoly_backsub(dp_layers):
     for i, layer in enumerate(reversed(dp_layers[1:-1])):
         constraints_acc = layer.backsub(constraints_acc)
         logger.debug(f'Layer {len(dp_layers) - 2 - i} [{layer.layer}]:')
-        logger.debug(str(constraints_acc))
-        
+        logger.debug(str(constraints_acc))  
     ur = constraints_acc.ur.flatten(0, -2)
     lr = constraints_acc.lr.flatten(0, -2)
     assert ur.dim() == 2
-    
     lb_in = dp_layers[0].bounds.lb.flatten(1)
     ub_in = dp_layers[0].bounds.ub.flatten(1)
     b_curr = bounds_mul_constraints(DpConstraints(lr, ur, constraints_acc.lo, constraints_acc.uo), DpBounds(lb_in, ub_in))

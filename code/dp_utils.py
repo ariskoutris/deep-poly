@@ -61,6 +61,7 @@ def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
 
     return DpBounds(lb, ub)
 
+# TODO: Improve efficiency
 def constraints_mul(curr_c : DpConstraints, accum_c : DpConstraints) -> DpConstraints:
     accum_c_lr_pos = torch.relu(accum_c.lr)
     accum_c_lr_neg = -torch.relu(-accum_c.lr)
