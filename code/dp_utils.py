@@ -61,9 +61,7 @@ def get_input_bounds(x: torch.Tensor, eps: float, min_val=0, max_val=1):
 
     return DpBounds(lb, ub)
 
-# Use only during back propagation
 def constraints_mul(curr_c : DpConstraints, accum_c : DpConstraints) -> DpConstraints:
-
     accum_c_lr_pos = torch.relu(accum_c.lr)
     accum_c_lr_neg = -torch.relu(-accum_c.lr)
     accum_c_ur_pos = torch.relu(accum_c.ur)
@@ -77,6 +75,17 @@ def constraints_mul(curr_c : DpConstraints, accum_c : DpConstraints) -> DpConstr
     lo = lo + accum_c.lo
 
     return DpConstraints(lr, ur, lo, uo)
+
+def bounds_mul_constraints(constraints : DpConstraints, bounds : DpBounds) -> DpBounds:
+    lr_pos = torch.relu(constraints.lr)
+    lr_neg = -torch.relu(-constraints.lr)
+    ur_pos = torch.relu(constraints.ur)
+    ur_neg = -torch.relu(-constraints.ur)
+
+    lb = bounds.lb.flatten() @ lr_pos + bounds.ub.flatten() @ lr_neg + constraints.lo
+    ub = bounds.ub.flatten() @ ur_pos + bounds.lb.flatten() @ ur_neg + constraints.uo
+
+    return DpBounds(lb, ub)
 
 def check_postcondition(y, bounds: DpBounds) -> bool:
     try:
@@ -101,18 +110,6 @@ def check_postcondition_le(bounds: DpBounds) -> bool:
     lb = bounds.lb.flatten()
     logger.info(f'Certification Distance: {bounds.get_certification_distance()}\n')
     return lb.min() >= 0
-
-# Multiply bounds with constraints, use during forward pass
-def bounds_mul_constraints(constraints : DpConstraints, bounds : DpBounds) -> DpBounds:
-    lr_pos = torch.relu(constraints.lr)
-    lr_neg = -torch.relu(-constraints.lr)
-    ur_pos = torch.relu(constraints.ur)
-    ur_neg = -torch.relu(-constraints.ur)
-
-    lb = bounds.lb.flatten() @ lr_pos + bounds.ub.flatten() @ lr_neg + constraints.lo
-    ub = bounds.ub.flatten() @ ur_pos + bounds.lb.flatten() @ ur_neg + constraints.uo
-
-    return DpBounds(lb, ub)
 
 def log_layer_bounds(logger, layer, message):
     logger.debug(message)
@@ -145,58 +142,9 @@ def init_alphas(model, inp_shape, dp_layers=None) -> list[torch.Tensor]:
         prev = next
     return params_dict  
 
-if __name__ == "__main__":
-    model0 = nn.Sequential(
-        nn.Flatten(start_dim=1, end_dim=-1),
-        nn.Linear(in_features=784, out_features=50, bias=True),
-        nn.Linear(in_features=50, out_features=50, bias=True),
-        nn.Linear(in_features=50, out_features=50, bias=True),
-        nn.Linear(in_features=50, out_features=10, bias=True)
-    )
-    input0 = torch.randn((1, 28, 28))
-
-    model1 = nn.Sequential(
-        nn.Conv2d(1, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
-        nn.Conv2d(16, 8, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)),
-        nn.Flatten(start_dim=1, end_dim=-1),
-        nn.Linear(in_features=392, out_features=50, bias=True),
-        nn.Linear(in_features=50, out_features=10, bias=True)
-    )
-    input1 = torch.randn((1, 1, 28, 28))
-
-    model2 = nn.Sequential(
-        nn.Flatten(start_dim=1, end_dim=-1),
-        nn.Linear(in_features=784, out_features=100, bias=True),
-        nn.ReLU(),
-        nn.Linear(in_features=100, out_features=100, bias=True),
-        nn.ReLU(),
-        nn.Linear(in_features=100, out_features=10, bias=True)
-    )
-    input2 = torch.randn((1, 1, 28, 28))
-
-    model3 = nn.Sequential(
-        nn.Conv2d(3, 16, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),
-        nn.ReLU(),
-        nn.Conv2d(16, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1)),
-        nn.ReLU(),
-        nn.Flatten(start_dim=1, end_dim=-1),
-        nn.Linear(in_features=4096, out_features=100, bias=True),
-        nn.ReLU(),
-        nn.Linear(in_features=100, out_features=100, bias=True),
-        nn.ReLU(),
-        nn.Linear(in_features=100, out_features=10, bias=True),
-        nn.ReLU(),
-        nn.Linear(in_features=10, out_features=10, bias=True)
-    )
-    input3 = torch.randn((1, 3, 32, 32))
-
-    model = model3
-    input = input3
-    init_alphas(model, input.shape)
-    for i, layer in enumerate(model):
-        inp_shape = input.shape
-        input = layer(input)
-        out_shape = input.shape
-        print(f"C: inp {i} = {inp_shape} \tout {i} = {out_shape}")
-    
+def assign_alphas_to_relus(dp_layers, alphas):
+    for i, layer in enumerate(dp_layers):
+        if (i-1) in alphas:
+            layer.set_alphas(alphas[i - 1].value)
+    return dp_layers
 

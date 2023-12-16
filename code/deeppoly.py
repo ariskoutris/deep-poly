@@ -4,11 +4,11 @@ from dp_utils import *
 import numpy as np
 
 from line_profiler import profile
-from time import perf_counter
 import logging
 logger = logging.getLogger(__name__)
 
 DTYPE = torch.float32
+
 
 class DpInput():
     def __init__(self, bounds: DpBounds):
@@ -186,10 +186,6 @@ class DpConv():
 
             return W_conv, B_conv, out_shape
         
-        # conv = nn.Conv2d(1, 16, kernel_size=(3,3), padding=(2, 2), stride=(2, 2))
-        # conv.double()
-        # # conv.bias.data = torch.zeros_like(conv.bias)
-        # inp_shape = (1, 1, 28, 28)
 
         W, B, out_shape = get_weight_matrix(self.layer, inp_shape)
 
@@ -199,13 +195,6 @@ class DpConv():
         B = B.flatten()
         W.shape[1] == B.shape[0]
 
-        # def test_weight(T, B, conv, inp_shape):
-        #     i = torch.randn(*inp_shape, dtype = DTYPE)
-        #     out = i.flatten() @ T.t() + B
-        #     print(torch.allclose(conv(i).flatten(), out.flatten(), atol=1e-06))
-
-        # for i in range(100):
-        #     test_weight(W, B, conv, inp_shape)
         return W, B, out_shape
 
     @profile 
@@ -254,6 +243,7 @@ class DiffLayer():
 
 @profile
 def deeppoly_backsub(dp_layers):
+    
     constraints_acc = dp_layers[-1].constraints.copy()
     constraints_acc.ur = constraints_acc.ur.t()
     constraints_acc.lr = constraints_acc.lr.t()
@@ -265,8 +255,9 @@ def deeppoly_backsub(dp_layers):
         logger.debug(str(constraints_acc))
         
     ur = constraints_acc.ur.flatten(0, -2)
-    assert ur.dim() == 2
     lr = constraints_acc.lr.flatten(0, -2)
+    assert ur.dim() == 2
+    
     lb_in = dp_layers[0].bounds.lb.flatten(1)
     ub_in = dp_layers[0].bounds.ub.flatten(1)
     b_curr = bounds_mul_constraints(DpConstraints(lr, ur, constraints_acc.lo, constraints_acc.uo), DpBounds(lb_in, ub_in))
@@ -275,6 +266,7 @@ def deeppoly_backsub(dp_layers):
     logger.debug(f'Input Layer:')
     logger.debug(str(constraints_acc))
     logger.debug('[BACKSUBSTITUTION END]')
+    
     return DpBounds(lb, ub)
 
 @profile
@@ -287,22 +279,23 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
         dp_layer = None
         if layers != None:
             dp_layer = dp_layers[i + 1] # i + 1 as the first element is DpInput
-            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.Flatten):
             dp_layer = DpFlatten(layer)
-            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.Linear):
             dp_layer = DpLinear(layer)
-            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.ReLU):
             dp_layer = DpRelu(layer, False)
-            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.LeakyReLU):
             dp_layer = DpRelu(layer)
-            dp_layer.compute_bound(dp_layers[i].bounds)
         elif isinstance(layer, nn.Conv2d):
             dp_layer = DpConv(layer)
+
             dp_layer.compute_bound(dp_layers[i].bounds)
+            dp_layer.compute_bound(dp_layers[i].bounds)
+
+        # Uncomment this line after optimization of DpConv.compute_bound is complete
+        # dp_layer.compute_bound(dp_layers[i].bounds)
+        dp_layer.compute_bound(dp_layers[i].bounds)
 
         # Uncomment this line after optimization of DpConv.compute_bound is complete
         # dp_layer.compute_bound(dp_layers[i].bounds)
@@ -310,10 +303,9 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
         if layers == None:
             dp_layers.append(dp_layer)
         
-        # Backsubstitution is called on the layer before the ReLU
         if not isinstance(layer, nn.Flatten):
             if i + 2 <= len(model) and (isinstance(model[i + 1], nn.ReLU) or isinstance(model[i + 1], nn.LeakyReLU)):
-                dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2]) # i + 2 as the first element is DpInput
+                dp_layer.bounds = deeppoly_backsub(dp_layers[:i+2])
                 
         log_layer_bounds(logger, dp_layer, f'Layer {i + 1} [{layer}]')
 
@@ -326,12 +318,6 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
             le_layer.bounds = deeppoly_backsub(dp_layers)
         log_layer_bounds(logger, le_layer, f'Layer {len(dp_layers) - 1} [{le_layer}]:')
 
-    return dp_layers
-
-def assign_alphas_to_relus(dp_layers, alphas):
-    for i, layer in enumerate(dp_layers):
-        if (i-1) in alphas:
-            layer.set_alphas(alphas[i - 1].value) # i - 1 as the first element of dp_layers is DpInput
     return dp_layers
 
 @profile
@@ -378,8 +364,6 @@ def certify_with_alphas(model, dp_layers, x, y, eps, num_epochs, use_le=True):
     loss_func = nn.CrossEntropyLoss() 
     optimizer = torch.optim.Adam([alphas_dict[key].value for key in alphas_dict], lr=2)
 
-    # Early Stopping Parameters
-    num_epochs = 30
     min_epochs = 3
     window_size = 3
     cd_window = []
