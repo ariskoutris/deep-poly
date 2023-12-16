@@ -68,8 +68,8 @@ def constraints_mul(curr_c : DpConstraints, accum_c : DpConstraints) -> DpConstr
     accum_c_ur_pos = torch.clamp(accum_c.ur, min=0)
     accum_c_ur_neg = torch.clamp(accum_c.ur, max=0)
 
-    curr_c_lr_t = curr_c.lr.t()
-    curr_c_ur_t = curr_c.ur.t()
+    curr_c_lr_t = curr_c.lr
+    curr_c_ur_t = curr_c.ur
     lr =  curr_c_lr_t @ accum_c_lr_pos +  curr_c_ur_t @ accum_c_lr_neg
     ur =  curr_c_ur_t @ accum_c_ur_pos +  curr_c_lr_t @ accum_c_ur_neg
     lo = curr_c.lo @ accum_c_lr_pos + curr_c.uo @ accum_c_lr_neg

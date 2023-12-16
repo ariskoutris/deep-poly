@@ -36,7 +36,7 @@ class DpLinear():
         self.bounds.ub = self.bounds.ub.view(*self.inp_shape[:-1], self.out_last_dim)
 
     def backsub(self, accum_c: DpConstraints):
-        return constraints_mul(self.constraints, accum_c)
+        return constraints_mul(self.constraints_trans, accum_c)
 
 
 class DpFlatten():
@@ -116,6 +116,7 @@ class DpRelu():
         lo[mask_crossing] = self.bias_lower[mask_crossing]
 
         self.constraints = DpConstraints(torch.diag(lr.flatten()), torch.diag(ur.flatten()), lo.flatten(), uo.flatten())
+        self.constraints_trans = DpConstraints(torch.diag(lr.flatten()), torch.diag(ur.flatten()), lo.flatten(), uo.flatten())
 
     def compute_bound(self, bounds: DpBounds):
         self.inp_shape = bounds.shape
@@ -207,6 +208,8 @@ class DpConv():
             r, o, out_shape = self.compute_weight_matrix(bounds.shape)
             self.constraints = DpConstraints(r, r, o, o)
             self.out_shape = out_shape
+        lr, ur, lo, uo = self.constraints.lr, self.constraints.ur, self.constraints.lo, self.constraints.uo
+        self.constraints_trans = DpConstraints(lr.t(), ur.t(), lo, uo)
 
         self.bounds = bounds_mul_constraints(DpConstraints(r.t(), r.t(), o, o), bounds)
         self.bounds.lb = self.bounds.lb.view(self.out_shape)
@@ -216,7 +219,7 @@ class DpConv():
     def backsub(self, accum_c: DpConstraints):
         acc_lr = accum_c.lr.flatten(0, -2)
         acc_ur = accum_c.ur.flatten(0, -2)
-        constraints_out = constraints_mul(self.constraints, DpConstraints(acc_lr, acc_ur, accum_c.lo, accum_c.uo))
+        constraints_out = constraints_mul(self.constraints_trans, DpConstraints(acc_lr, acc_ur, accum_c.lo, accum_c.uo))
         out_lr = constraints_out.lr.view(*self.inp_shape, acc_lr.shape[-1])
         out_ur = constraints_out.ur.view(*self.inp_shape, acc_ur.shape[-1])
         return DpConstraints(out_lr, out_ur, constraints_out.lo, constraints_out.uo)
@@ -228,6 +231,7 @@ class DiffLayer():
         self.target = target
         self.n_classes = n_classes
         self.constraints = self.compute_constraints(target, n_classes)
+        self.constraints_trans = DpConstraints(self.constraints.lr.t(), self.constraints.ur.t(), self.constraints.lo, self.constraints.uo)
 
     def compute_constraints(self, target: int = None, n_classes: int = None):
         I = [i for i in range(n_classes) if i != target]
@@ -239,7 +243,7 @@ class DiffLayer():
         return DpConstraints(lr, ur, lo, uo)
 
     def backsub(self, accum_c: DpConstraints):
-        return constraints_mul(self.constraints, accum_c)
+        return constraints_mul(self.constraints_trans, accum_c)
 
 @profile
 def deeppoly_backsub(dp_layers):
@@ -288,16 +292,8 @@ def propagate_sample(model, x, eps, le_layer=None, min_val=0, max_val=1, layers=
         elif isinstance(layer, nn.Conv2d):
             dp_layer = DpConv(layer)
 
-            dp_layer.compute_bound(dp_layers[i].bounds)
-            dp_layer.compute_bound(dp_layers[i].bounds)
-
-        # Uncomment this line after optimization of DpConv.compute_bound is complete
-        # dp_layer.compute_bound(dp_layers[i].bounds)
         dp_layer.compute_bound(dp_layers[i].bounds)
 
-        # Uncomment this line after optimization of DpConv.compute_bound is complete
-        # dp_layer.compute_bound(dp_layers[i].bounds)
-        
         if layers == None:
             dp_layers.append(dp_layer)
         
