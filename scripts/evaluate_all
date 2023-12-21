@@ -5,7 +5,7 @@ do
 	echo Evaluating network ${net} on base...
 	for spec in `ls test_cases/${net}`
 	do
-		python code/verifier.py --net ${net} --spec test_cases/${net}/${spec} --labels test_cases/gt.txt
+		python code/verifier.py --net ${net} --spec test_cases/${net}/${spec}
 	done
 done
 echo --------------------------------------------------------------------
@@ -14,7 +14,7 @@ do
 	echo Evaluating network ${net} on prelim...
 	for spec in `ls test_cases_prelim/${net}`
 	do
-		python code/verifier.py --net ${net} --spec test_cases_prelim/${net}/${spec} --labels test_cases_prelim/gt.txt
+		python code/verifier.py --net ${net} --spec test_cases_prelim/${net}/${spec}
 	done
 done
 echo --------------------------------------------------------------------
