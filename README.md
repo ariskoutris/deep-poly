@@ -5,7 +5,7 @@ This project implements the DeepPoly algorithm introduced in "An Abstract Domain
 This work was carried out for the course “Reliable and Trustworthy Artificial Intelligence” at ETH Zurich.
 
 <p align="center">
-    <img src="https://imgur.com/ejEE2wE.png" alt="overview" width="80%">
+    <img src="https://imgur.com/ejEE2wE.png" alt="overview" width="100%">
 </p>
 
 
