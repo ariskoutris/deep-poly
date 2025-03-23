@@ -1,0 +1,52 @@
+#!/bin/bash
+# filepath: /Users/ariskoutris/Documents/eth23-AS/Reliable and Trustworthy AI/Project/deep-poly/scripts/run_repeat
+
+# Usage: ./run_repeat [script_name] [iterations]
+# Example: ./run_repeat evaluate 5
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 [script_name] [iterations=5]"
+    exit 1
+fi
+
+SCRIPT="scripts/$1"
+ITERATIONS=${2:-5}  # Default to 5 if not specified
+
+if [ ! -f "$SCRIPT" ]; then
+    echo "Error: Script $SCRIPT not found!"
+    exit 1
+fi
+
+start_total=$(date +%s.%N)
+count=0
+all_ok=true
+
+for i in $(seq 1 $ITERATIONS)
+do
+    start=$(date +%s.%N)
+    
+    # Run the script and capture status
+    bash "$SCRIPT"
+    status=$?
+    
+    if [ $status -ne 0 ]; then
+        echo "Warning: Iteration $i failed with status $status"
+        all_ok=false
+    fi
+    
+    end=$(date +%s.%N)
+    duration=$(echo "$end - $start" | bc)
+    printf "Time for iteration $i: %.3f seconds\n\n" "$duration"
+    count=$((count + 1))
+done
+
+end_total=$(date +%s.%N)
+total_duration=$(echo "$end_total - $start_total" | bc)
+average_duration=$(echo "$total_duration / $count" | bc -l)
+
+printf "Average time per iteration: %.3f seconds\n" "$average_duration"
+
+if [ "$all_ok" = false ]; then
+    echo "Warning: Some iterations failed. Results may be inaccurate."
+    exit 1
+fi

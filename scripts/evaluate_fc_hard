@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for i  in "fc_7 test_cases/fc_7/img4_mnist_0.0928.txt" "fc_1 test_cases_prelim/fc_1/img7_mnist_0.0915.txt" "fc_2 test_cases_prelim/fc_2/img8_mnist_0.0750.txt"
+for i in "fc_7 test_cases/fc_7/img4_mnist_0.0928.txt" "fc_1 test_cases_prelim/fc_1/img7_mnist_0.0915.txt" "fc_2 test_cases_prelim/fc_2/img8_mnist_0.0750.txt"
 do
 	set -- $i
 	echo Evaluating network ${1}...
