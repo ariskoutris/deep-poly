@@ -1,5 +1,4 @@
 #!/bin/bash
-# filepath: /Users/ariskoutris/Documents/eth23-AS/Reliable and Trustworthy AI/Project/deep-poly/scripts/run_repeat
 
 # Usage: ./run_repeat [script_name] [iterations]
 # Example: ./run_repeat evaluate 5
