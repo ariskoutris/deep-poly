@@ -1,4 +1,21 @@
-*.pyc
+# Python bytecode files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
 .venv
-.vscode
-__pycache__
+venv/
+ENV/
+
+# Editor settings
+.vscode/
+.idea/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# OS specific files
+.DS_Store

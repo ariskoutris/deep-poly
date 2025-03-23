@@ -1,4 +1,4 @@
-name: rtai-project
+name: rtai
 channels:
   - defaults
   - conda-forge
