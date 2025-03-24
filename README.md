@@ -1,7 +1,7 @@
 # DeepPoly
 
 
-This project implements the DeepPoly algorithm introduced in "An Abstract Domain for Certifying Neural Networks". It uses [abstract interpretation](https://en.wikipedia.org/wiki/Abstract_interpretation) to check if neural networks trained on MNIST and CIFAR10 are robust against input perturbations. The analyzer supports feedforward, convolutional, and ReLU layers, automatically verifying whether specified safety properties hold under different kinds of changes to the input.
+This project implements the DeepPoly algorithm introduced in [An Abstract Domain for Certifying Neural Networks](https://doi.org/10.1145/3290354). It uses [abstract interpretation](https://en.wikipedia.org/wiki/Abstract_interpretation) to check if neural networks trained on MNIST and CIFAR10 are robust against input perturbations. The analyzer supports feedforward, convolutional, and ReLU layers, automatically verifying whether specified safety properties hold under different kinds of changes to the input.
 This work was carried out for the course “Reliable and Trustworthy Artificial Intelligence” at ETH Zurich.
 
 <p align="center">
@@ -56,3 +56,10 @@ To evaluate the verifier on all networks and sample test cases, run:
 ```bash
 scripts/evaluate
 ```
+
+
+## Team Members
+
+- Aristotelis Koutris  
+- Baidyanath Kundu
+- Garima Singh
