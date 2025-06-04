@@ -176,7 +176,7 @@ class DpConv():
                     for j in range(W_o):
                         padded_H_i, padded_W_i = H_i + 2 * conv.padding[0], W_i + 2 * conv.padding[1]
                         conv_row, conv_col = i * conv.stride[0], j * conv.stride[1]
-                        if conv_row >= padded_H_i | conv_col >= padded_W_i:
+                        if conv_row >= padded_H_i or conv_col >= padded_W_i:
                             continue
                         temp_weight = get_weight((C_in, padded_H_i, padded_W_i), conv_row, conv_col, kernel[c])
                         W_conv[c, i, j] = temp_weight[:, conv.padding[0] : H_i+conv.padding[0], conv.padding[1] : W_i + conv.padding[1]]
